@@ -33,9 +33,19 @@ const Index = () => {
   useEffect(() => {
     loadData(); // first load
 
+    // TODO: uncomment when testing the system
+
+    // const interval = setInterval(() => {
+    //   loadData(); // reload 5 seconds
+    // }, 5000);
+
+    // TODO: remove this when testing the system
+    const THREE_MONTHS = 1000 * 60 * 60 * 24 * 90;
+
     const interval = setInterval(() => {
-      loadData(); // reload 5 seconds
-    }, 5000);
+      loadData(); // reload every 3 months (approx)
+    }, THREE_MONTHS);
+
 
     return () => clearInterval(interval);
   }, [loadData]);
@@ -67,15 +77,33 @@ const Index = () => {
   // -------------------- TODAY STATS --------------------
   const todayStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const todayRecords = data.filter((r) => r.date === today);
+
+    const todayRecords = data.filter(r => r.date === today);
+
+    const latestMap = new Map<string, AttendanceRecord>();
+
+    for (const record of todayRecords) {
+      const existing = latestMap.get(record.studentId);
+
+      if (
+        !existing ||
+        new Date(record.createdAt) >
+        new Date(existing.createdAt)
+      ) {
+        latestMap.set(record.studentId, record);
+      }
+    }
+
+    const latestRecords = Array.from(latestMap.values());
 
     return {
-      total: todayRecords.length,
-      present: todayRecords.filter((r) => r.status === "Present").length,
-      late: todayRecords.filter((r) => r.status === "Late").length,
-      absent: todayRecords.filter((r) => r.status === "Absent").length,
+      total: latestRecords.length,
+      present: latestRecords.filter(r => r.status === "Present").length,
+      late: latestRecords.filter(r => r.status === "Late").length,
+      absent: latestRecords.filter(r => r.status === "Absent").length,
     };
   }, [data]);
+
 
   // -------------------- UNIQUE STUDENTS --------------------
   const uniqueStudents = useMemo(() => {
@@ -98,13 +126,12 @@ const Index = () => {
           <StatCard
             title="Present Today"
             value={todayStats.present}
-            subtitle={`${
-              todayStats.total > 0
+            subtitle={`${todayStats.total > 0
                 ? Math.round(
-                    (todayStats.present / todayStats.total) * 100
-                  )
+                  (todayStats.present / todayStats.total) * 100
+                )
                 : 0
-            }% attendance`}
+              }% attendance`}
             icon={UserCheck}
             variant="present"
           />

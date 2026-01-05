@@ -1,4 +1,4 @@
-export type AttendanceStatus = 'Present' | 'Late' | 'Absent';
+export type AttendanceStatus = "Present" | "Late" | "Absent";
 
 export interface AttendanceRecord {
   studentId: string;
@@ -8,7 +8,9 @@ export interface AttendanceRecord {
   checkOutTime: string | null;
   status: AttendanceStatus;
   image: string;
+  createdAt: string;
 }
+
 
 export interface DailyAttendanceSummary {
   date: string;
@@ -23,3 +25,10 @@ export interface StatusDistribution {
   count: number;
   percentage: number;
 }
+
+export type TimeRange =
+  | "today"
+  | "7days"
+  | "1month"
+  | "3months"
+  | "1year";

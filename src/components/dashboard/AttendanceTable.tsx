@@ -21,7 +21,13 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { format } from "date-fns";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import {
+  Clock,
+  LogIn,
+  LogOut,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { Dialog, DialogContent } from "@radix-ui/react-dialog";
 
 interface AttendanceTableProps {
@@ -29,6 +35,16 @@ interface AttendanceTableProps {
 }
 
 const PAGE_SIZE = 10;
+
+type SortKey =
+  | "studentId"
+  | "date"
+  | "checkInTime"
+  | "checkOutTime"
+  | "status"
+  | "createdAt";
+
+type SortDirection = "asc" | "desc";
 
 const getStatusVariant = (
   status: string
@@ -56,71 +72,120 @@ const getInitials = (name: string): string =>
 export function AttendanceTable({ data }: AttendanceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
 
-  // popup state
+  const [sortKey, setSortKey] =
+    useState<SortKey>("createdAt");
+  const [sortDirection, setSortDirection] =
+    useState<SortDirection>("desc");
+
   const [open, setOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{
     src: string;
     name: string;
   } | null>(null);
 
-  const totalPages = Math.ceil(data.length / PAGE_SIZE);
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection((d) =>
+        d === "asc" ? "desc" : "asc"
+      );
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aVal = a[sortKey] ?? "";
+      const bVal = b[sortKey] ?? "";
+
+      if (sortKey === "createdAt") {
+        return sortDirection === "asc"
+          ? new Date(aVal).getTime() -
+              new Date(bVal).getTime()
+          : new Date(bVal).getTime() -
+              new Date(aVal).getTime();
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, sortKey, sortDirection]);
+
+  const totalPages = Math.ceil(sortedData.length / PAGE_SIZE);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    return data.slice(start, end);
-  }, [data, currentPage]);
+    return sortedData.slice(start, start + PAGE_SIZE);
+  }, [sortedData, currentPage]);
 
-  if (data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="mb-4 rounded-full bg-muted p-4">
-          <Clock className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-semibold">No records found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Try adjusting your filters to find attendance records.
-        </p>
-      </div>
-    );
-  }
+  const SortIcon = ({ column }: { column: SortKey }) =>
+    sortKey === column ? (
+      sortDirection === "asc" ? (
+        <ArrowUp className="h-3 w-3" />
+      ) : (
+        <ArrowDown className="h-3 w-3" />
+      )
+    ) : null;
 
   return (
     <>
-      {/* ================= TABLE ================= */}
       <div className="overflow-hidden rounded-lg border bg-card shadow-card">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead>Image</TableHead>
-              <TableHead>Student ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>
-                <div className="flex items-center gap-1.5">
-                  <LogIn className="h-4 w-4" />
-                  Check-in
-                </div>
+
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort("studentId")}
+              >
+                Student ID <SortIcon column="studentId" />
               </TableHead>
-              <TableHead>
-                <div className="flex items-center gap-1.5">
-                  <LogOut className="h-4 w-4" />
-                  Check-out
-                </div>
+
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort("date")}
+              >
+                Date <SortIcon column="date" />
               </TableHead>
+
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort("checkInTime")}
+              >
+                <LogIn className="inline h-4 w-4 mr-1" />
+                Check-in <SortIcon column="checkInTime" />
+              </TableHead>
+
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort("checkOutTime")}
+              >
+                <LogOut className="inline h-4 w-4 mr-1" />
+                Check-out <SortIcon column="checkOutTime" />
+              </TableHead>
+
               <TableHead>Status</TableHead>
+
+              {/* 🔥 CREATED AT */}
+              <TableHead
+                className="cursor-pointer"
+                onClick={() => handleSort("createdAt")}
+              >
+                Created At <SortIcon column="createdAt" />
+              </TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
             {paginatedData.map((record, index) => (
-              <TableRow
-                key={`${record.studentId}-${record.date}-${index}`}
-                className="hover:bg-muted/30"
-              >
+              <TableRow key={index}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar
-                      className="h-14 w-14 cursor-pointer hover:scale-105 transition"
+                      className="h-12 w-12 cursor-pointer"
                       onClick={() => {
                         setSelectedImage({
                           src: record.image,
@@ -129,48 +194,27 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
                         setOpen(true);
                       }}
                     >
-                      <AvatarImage
-                        src={record.image}
-                        alt={record.fullName}
-                        className="object-cover"
-                      />
+                      <AvatarImage src={record.image} />
                       <AvatarFallback>
                         {getInitials(record.fullName)}
                       </AvatarFallback>
                     </Avatar>
-
-                    <span className="font-medium">
-                      {record.fullName}
-                    </span>
+                    <span>{record.fullName}</span>
                   </div>
                 </TableCell>
 
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {record.studentId}
-                </TableCell>
+                <TableCell>{record.studentId}</TableCell>
 
-                <TableCell className="text-muted-foreground">
-                  {format(new Date(record.date), "MMM dd, yyyy")}
+                <TableCell>
+                  {format(new Date(record.date), "dd/MM/yyyy")}
                 </TableCell>
 
                 <TableCell>
-                  {record.checkInTime ? (
-                    <span className="font-mono text-sm">
-                      {record.checkInTime}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+                  {record.checkInTime ?? "—"}
                 </TableCell>
 
                 <TableCell>
-                  {record.checkOutTime ? (
-                    <span className="font-mono text-sm">
-                      {record.checkOutTime}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
+                  {record.checkOutTime ?? "—"}
                 </TableCell>
 
                 <TableCell>
@@ -178,12 +222,19 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
                     {record.status}
                   </Badge>
                 </TableCell>
+
+                {/* 🔥 CREATED AT VALUE */}
+                <TableCell className="text-sm text-muted-foreground">
+                  {format(
+                    new Date(record.createdAt),
+                    "dd/MM/yyyy HH:mm:ss"
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
 
-        {/* ================= PAGINATION ================= */}
         {totalPages > 1 && (
           <div className="border-t px-4 py-3">
             <Pagination>
@@ -193,27 +244,19 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
                     onClick={() =>
                       setCurrentPage((p) => Math.max(p - 1, 1))
                     }
-                    className={
-                      currentPage === 1
-                        ? "pointer-events-none opacity-50"
-                        : ""
-                    }
                   />
                 </PaginationItem>
 
-                {Array.from({ length: totalPages }).map((_, i) => {
-                  const page = i + 1;
-                  return (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        isActive={page === currentPage}
-                        onClick={() => setCurrentPage(page)}
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <PaginationItem key={i}>
+                    <PaginationLink
+                      isActive={currentPage === i + 1}
+                      onClick={() => setCurrentPage(i + 1)}
+                    >
+                      {i + 1}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
 
                 <PaginationItem>
                   <PaginationNext
@@ -221,11 +264,6 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
                       setCurrentPage((p) =>
                         Math.min(p + 1, totalPages)
                       )
-                    }
-                    className={
-                      currentPage === totalPages
-                        ? "pointer-events-none opacity-50"
-                        : ""
                     }
                   />
                 </PaginationItem>
@@ -235,7 +273,6 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
         )}
       </div>
 
-      {/* ================= IMAGE POPUP ================= */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md p-0">
           {selectedImage && (
@@ -243,7 +280,7 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
               <img
                 src={selectedImage.src}
                 alt={selectedImage.name}
-                className="w-full h-auto rounded-lg"
+                className="w-full rounded-lg"
               />
               <div className="p-4 text-center font-medium">
                 {selectedImage.name}
