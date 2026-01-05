@@ -30,25 +30,26 @@ const Index = () => {
   }, []);
 
   // -------------------- REALTIME (AUTO REFRESH) --------------------
-  useEffect(() => {
-    loadData(); // first load
+  // TODO: uncomment when testing the system
+  // useEffect(() => {
+  //   loadData(); // first load
 
-    // TODO: uncomment when testing the system
+  //   // TODO: uncomment when testing the system
 
-    // const interval = setInterval(() => {
-    //   loadData(); // reload 5 seconds
-    // }, 5000);
+  //   // const interval = setInterval(() => {
+  //   //   loadData(); // reload 5 seconds
+  //   // }, 5000);
 
-    // TODO: remove this when testing the system
-    const THREE_MONTHS = 1000 * 60 * 60 * 24 * 90;
+  //   // TODO: remove this when testing the system
+  //   const THREE_MONTHS = 1000 * 60 * 60 * 24 * 90;
 
-    const interval = setInterval(() => {
-      loadData(); // reload every 3 months (approx)
-    }, THREE_MONTHS);
+  //   const interval = setInterval(() => {
+  //     loadData(); // reload every 3 months (approx)
+  //   }, THREE_MONTHS);
 
 
-    return () => clearInterval(interval);
-  }, [loadData]);
+  //   return () => clearInterval(interval);
+  // }, [loadData]);
 
   // -------------------- FILTER --------------------
   const filteredData = useMemo(() => {
