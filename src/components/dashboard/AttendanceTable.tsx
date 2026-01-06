@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useState } from "react";
 import { AttendanceRecord } from "@/types/attendance";
 import { Badge } from "@/components/ui/badge";
@@ -21,14 +19,14 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { format } from "date-fns";
+import { ArrowUp, ArrowDown, Clock, LogIn, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
-  Clock,
-  LogIn,
-  LogOut,
-  ArrowUp,
-  ArrowDown,
-} from "lucide-react";
-import { Dialog, DialogContent } from "@radix-ui/react-dialog";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface AttendanceTableProps {
   data: AttendanceRecord[];
@@ -36,19 +34,10 @@ interface AttendanceTableProps {
 
 const PAGE_SIZE = 10;
 
-type SortKey =
-  | "studentId"
-  | "date"
-  | "checkInTime"
-  | "checkOutTime"
-  | "status"
-  | "createdAt";
-
+type SortKey = "studentId" | "date" | "checkInTime" | "checkOutTime" | "status" | "createdAt";
 type SortDirection = "asc" | "desc";
 
-const getStatusVariant = (
-  status: string
-): "present" | "late" | "absent" => {
+const getStatusVariant = (status: string): "present" | "late" | "absent" => {
   switch (status) {
     case "Present":
       return "present";
@@ -71,23 +60,13 @@ const getInitials = (name: string): string =>
 
 export function AttendanceTable({ data }: AttendanceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [sortKey, setSortKey] =
-    useState<SortKey>("createdAt");
-  const [sortDirection, setSortDirection] =
-    useState<SortDirection>("desc");
-
-  const [open, setOpen] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<{
-    src: string;
-    name: string;
-  } | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [selectedImage, setSelectedImage] = useState<{ src: string; name: string } | null>(null);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
-      setSortDirection((d) =>
-        d === "asc" ? "desc" : "asc"
-      );
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
       setSortDirection("asc");
@@ -101,10 +80,8 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
 
       if (sortKey === "createdAt") {
         return sortDirection === "asc"
-          ? new Date(aVal).getTime() -
-              new Date(bVal).getTime()
-          : new Date(bVal).getTime() -
-              new Date(aVal).getTime();
+          ? new Date(aVal).getTime() - new Date(bVal).getTime()
+          : new Date(bVal).getTime() - new Date(aVal).getTime();
       }
 
       if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
@@ -123,169 +100,166 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
   const SortIcon = ({ column }: { column: SortKey }) =>
     sortKey === column ? (
       sortDirection === "asc" ? (
-        <ArrowUp className="h-3 w-3" />
+        <ArrowUp className="ml-1 h-3 w-3" />
       ) : (
-        <ArrowDown className="h-3 w-3" />
+        <ArrowDown className="ml-1 h-3 w-3" />
       )
     ) : null;
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border bg-card shadow-card">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead>Image</TableHead>
-
+            <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableHead className="w-[200px]">Student</TableHead>
               <TableHead
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => handleSort("studentId")}
               >
-                Student ID <SortIcon column="studentId" />
+                <div className="flex items-center">
+                  ID <SortIcon column="studentId" />
+                </div>
               </TableHead>
-
               <TableHead
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => handleSort("date")}
               >
-                Date <SortIcon column="date" />
+                <div className="flex items-center">
+                  Date <SortIcon column="date" />
+                </div>
               </TableHead>
-
               <TableHead
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => handleSort("checkInTime")}
               >
-                <LogIn className="inline h-4 w-4 mr-1" />
-                Check-in <SortIcon column="checkInTime" />
+                <div className="flex items-center">
+                  <LogIn className="mr-1 h-3 w-3" />
+                  Check-in <SortIcon column="checkInTime" />
+                </div>
               </TableHead>
-
               <TableHead
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => handleSort("checkOutTime")}
               >
-                <LogOut className="inline h-4 w-4 mr-1" />
-                Check-out <SortIcon column="checkOutTime" />
+                <div className="flex items-center">
+                  <LogOut className="mr-1 h-3 w-3" />
+                  Check-out <SortIcon column="checkOutTime" />
+                </div>
               </TableHead>
-
               <TableHead>Status</TableHead>
-
-              {/* 🔥 CREATED AT */}
               <TableHead
-                className="cursor-pointer"
+                className="cursor-pointer hover:text-foreground transition-colors"
                 onClick={() => handleSort("createdAt")}
               >
-                Created At <SortIcon column="createdAt" />
+                <div className="flex items-center">
+                  <Clock className="mr-1 h-3 w-3" />
+                  Recorded <SortIcon column="createdAt" />
+                </div>
               </TableHead>
             </TableRow>
           </TableHeader>
-
           <TableBody>
-            {paginatedData.map((record, index) => (
-              <TableRow key={index}>
+            {paginatedData.map((record) => (
+              <TableRow
+                key={record.id}
+                className="group hover:bg-muted/30 transition-colors"
+              >
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar
-                      className="h-12 w-12 cursor-pointer"
-                      onClick={() => {
+                      className="h-9 w-9 cursor-pointer ring-2 ring-transparent group-hover:ring-primary/20 transition-all"
+                      onClick={() =>
                         setSelectedImage({
                           src: record.image,
                           name: record.fullName,
-                        });
-                        setOpen(true);
-                      }}
+                        })
+                      }
                     >
-                      <AvatarImage src={record.image} />
-                      <AvatarFallback>
+                      <AvatarImage src={record.image} alt={record.fullName} />
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                         {getInitials(record.fullName)}
                       </AvatarFallback>
                     </Avatar>
-                    <span>{record.fullName}</span>
+                    <span className="font-medium">{record.fullName}</span>
                   </div>
                 </TableCell>
-
-                <TableCell>{record.studentId}</TableCell>
-
-                <TableCell>
-                  {format(new Date(record.date), "dd/MM/yyyy")}
+                <TableCell className="font-mono text-sm text-muted-foreground">
+                  {record.studentId}
                 </TableCell>
-
-                <TableCell>
+                <TableCell>{format(new Date(record.date), "MMM d, yyyy")}</TableCell>
+                <TableCell className="font-mono text-sm">
                   {record.checkInTime ?? "—"}
                 </TableCell>
-
-                <TableCell>
+                <TableCell className="font-mono text-sm">
                   {record.checkOutTime ?? "—"}
                 </TableCell>
-
                 <TableCell>
                   <Badge variant={getStatusVariant(record.status)}>
                     {record.status}
                   </Badge>
                 </TableCell>
-
-                {/* 🔥 CREATED AT VALUE */}
                 <TableCell className="text-sm text-muted-foreground">
-                  {format(
-                    new Date(record.createdAt),
-                    "dd/MM/yyyy HH:mm:ss"
-                  )}
+                  {format(new Date(record.createdAt), "MMM d, HH:mm")}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-
-        {totalPages > 1 && (
-          <div className="border-t px-4 py-3">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() =>
-                      setCurrentPage((p) => Math.max(p - 1, 1))
-                    }
-                  />
-                </PaginationItem>
-
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <PaginationItem key={i}>
-                    <PaginationLink
-                      isActive={currentPage === i + 1}
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() =>
-                      setCurrentPage((p) =>
-                        Math.min(p + 1, totalPages)
-                      )
-                    }
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md p-0">
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {(currentPage - 1) * PAGE_SIZE + 1} to{" "}
+            {Math.min(currentPage * PAGE_SIZE, sortedData.length)} of{" "}
+            {sortedData.length} records
+          </p>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <PaginationItem key={pageNum}>
+                    <PaginationLink
+                      isActive={currentPage === pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
+      <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{selectedImage?.name}</DialogTitle>
+          </DialogHeader>
           {selectedImage && (
-            <>
+            <div className="flex justify-center">
               <img
                 src={selectedImage.src}
                 alt={selectedImage.name}
-                className="w-full rounded-lg"
+                className="rounded-lg max-h-96 object-cover"
               />
-              <div className="p-4 text-center font-medium">
-                {selectedImage.name}
-              </div>
-            </>
+            </div>
           )}
         </DialogContent>
       </Dialog>

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Users, UserCheck, Clock, UserX } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -13,15 +11,12 @@ import { AttendanceStatus, AttendanceRecord } from "@/types/attendance";
 import { format } from "date-fns";
 
 const Index = () => {
-  // -------------------- STATE --------------------
   const [data, setData] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [studentIdSearch, setStudentIdSearch] = useState("");
-  const [selectedStatus, setSelectedStatus] =
-    useState<AttendanceStatus | "all">("all");
+  const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus | "all">("all");
 
-  // -------------------- LOAD DATA --------------------
   const loadData = useCallback(async () => {
     setIsLoading(true);
     const sheetData = await fetchAttendanceFromSheet();
@@ -29,42 +24,18 @@ const Index = () => {
     setIsLoading(false);
   }, []);
 
-  // -------------------- REALTIME (AUTO REFRESH) --------------------
-  // TODO: uncomment when testing the system
-  // useEffect(() => {
-  //   loadData(); // first load
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  //   // TODO: uncomment when testing the system
-
-  //   // const interval = setInterval(() => {
-  //   //   loadData(); // reload 5 seconds
-  //   // }, 5000);
-
-  //   // TODO: remove this when testing the system
-  //   const THREE_MONTHS = 1000 * 60 * 60 * 24 * 90;
-
-  //   const interval = setInterval(() => {
-  //     loadData(); // reload every 3 months (approx)
-  //   }, THREE_MONTHS);
-
-
-  //   return () => clearInterval(interval);
-  // }, [loadData]);
-
-  // -------------------- FILTER --------------------
   const filteredData = useMemo(() => {
     return data.filter((record) => {
-      if (
-        selectedDate &&
-        record.date !== format(selectedDate, "yyyy-MM-dd")
-      ) {
+      if (selectedDate && record.date !== format(selectedDate, "yyyy-MM-dd")) {
         return false;
       }
       if (
         studentIdSearch &&
-        !record.studentId
-          .toLowerCase()
-          .includes(studentIdSearch.toLowerCase())
+        !record.studentId.toLowerCase().includes(studentIdSearch.toLowerCase())
       ) {
         return false;
       }
@@ -75,22 +46,14 @@ const Index = () => {
     });
   }, [data, selectedDate, studentIdSearch, selectedStatus]);
 
-  // -------------------- TODAY STATS --------------------
   const todayStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
-
-    const todayRecords = data.filter(r => r.date === today);
+    const todayRecords = data.filter((r) => r.date === today);
 
     const latestMap = new Map<string, AttendanceRecord>();
-
     for (const record of todayRecords) {
       const existing = latestMap.get(record.studentId);
-
-      if (
-        !existing ||
-        new Date(record.createdAt) >
-        new Date(existing.createdAt)
-      ) {
+      if (!existing || new Date(record.createdAt) > new Date(existing.createdAt)) {
         latestMap.set(record.studentId, record);
       }
     }
@@ -99,88 +62,90 @@ const Index = () => {
 
     return {
       total: latestRecords.length,
-      present: latestRecords.filter(r => r.status === "Present").length,
-      late: latestRecords.filter(r => r.status === "Late").length,
-      absent: latestRecords.filter(r => r.status === "Absent").length,
+      present: latestRecords.filter((r) => r.status === "Present").length,
+      late: latestRecords.filter((r) => r.status === "Late").length,
+      absent: latestRecords.filter((r) => r.status === "Absent").length,
     };
   }, [data]);
 
-
-  // -------------------- UNIQUE STUDENTS --------------------
   const uniqueStudents = useMemo(() => {
     return new Set(data.map((r) => r.studentId)).size;
   }, [data]);
 
-  // -------------------- UI --------------------
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6 md:py-8 space-y-6">
-        <DashboardHeader onRefresh={loadData} isLoading={isLoading} />
+    <div className="space-y-8 animate-fade-in">
+      <DashboardHeader onRefresh={loadData} isLoading={isLoading} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Students"
-            value={uniqueStudents}
-            subtitle="Enrolled in class"
-            icon={Users}
-          />
-          <StatCard
-            title="Present Today"
-            value={todayStats.present}
-            subtitle={`${todayStats.total > 0
-                ? Math.round(
-                  (todayStats.present / todayStats.total) * 100
-                )
-                : 0
-              }% attendance`}
-            icon={UserCheck}
-            variant="present"
-          />
-          <StatCard
-            title="Late Today"
-            value={todayStats.late}
-            subtitle="Arrived after 8:00 AM"
-            icon={Clock}
-            variant="late"
-          />
-          <StatCard
-            title="Absent Today"
-            value={todayStats.absent}
-            subtitle="Not checked in"
-            icon={UserX}
-            variant="absent"
-          />
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Students"
+          value={uniqueStudents}
+          subtitle="Registered students"
+          icon={Users}
+          variant="info"
+        />
+        <StatCard
+          title="Present Today"
+          value={todayStats.present}
+          subtitle={`${todayStats.total > 0 ? Math.round((todayStats.present / todayStats.total) * 100) : 0}% attendance`}
+          icon={UserCheck}
+          variant="present"
+          trend={todayStats.total > 0 ? { value: 5, isPositive: true } : undefined}
+        />
+        <StatCard
+          title="Late Today"
+          value={todayStats.late}
+          subtitle="Arrived after 9:00 AM"
+          icon={Clock}
+          variant="late"
+        />
+        <StatCard
+          title="Absent Today"
+          value={todayStats.absent}
+          subtitle="Not checked in"
+          icon={UserX}
+          variant="absent"
+        />
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <DailyAttendanceChart data={data} />
         </div>
+        <div>
+          <StatusDistributionChart data={data} />
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <DailyAttendanceChart data={data} />
-          </div>
+      {/* Records Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <StatusDistributionChart data={filteredData} />
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-xl border bg-card p-4 shadow-card">
-            <AttendanceFilters
-              onDateChange={setSelectedDate}
-              onStudentIdChange={setStudentIdSearch}
-              onStatusChange={setSelectedStatus}
-              selectedDate={selectedDate}
-              studentIdSearch={studentIdSearch}
-              selectedStatus={selectedStatus}
-            />
-          </div>
-
-          <AttendanceTable data={filteredData.slice(0, 50)} />
-
-          {filteredData.length > 50 && (
-            <p className="text-sm text-muted-foreground text-center">
-              Showing 50 of {filteredData.length} records.
+            <h2 className="text-xl font-semibold">Attendance Records</h2>
+            <p className="text-sm text-muted-foreground">
+              View and filter all attendance records
             </p>
-          )}
+          </div>
         </div>
+
+        <AttendanceFilters
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          studentIdSearch={studentIdSearch}
+          onStudentIdSearchChange={setStudentIdSearch}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+        />
+
+        <AttendanceTable data={filteredData} />
+
+        {filteredData.length > 50 && (
+          <p className="text-sm text-muted-foreground text-center">
+            Showing 50 of {filteredData.length} records
+          </p>
+        )}
       </div>
     </div>
   );

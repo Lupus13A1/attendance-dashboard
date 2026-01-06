@@ -1,9 +1,8 @@
-"use client";
-
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { AttendanceRecord } from "@/types/attendance";
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -11,227 +10,117 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { AttendanceRecord, TimeRange } from "@/types/attendance";
-import {
-  format,
-  subDays,
-  subMonths,
-  subYears,
-  startOfDay,
-} from "date-fns";
+import { format, subDays } from "date-fns";
 
-interface Props {
+interface DailyAttendanceChartProps {
   data: AttendanceRecord[];
 }
 
-export function DailyAttendanceChart({ data }: Props) {
-  /* -------------------- STATE -------------------- */
-  const [range, setRange] = useState<TimeRange>("today");
-
-  /* -------------------- FILTER -------------------- */
-  const filteredData = useMemo(() => {
-    const now = new Date();
-    let startDate: Date;
-
-    switch (range) {
-      case "today":
-        startDate = startOfDay(now);
-        break;
-      case "7days":
-        startDate = subDays(now, 7);
-        break;
-      case "1month":
-        startDate = subMonths(now, 1);
-        break;
-      case "3months":
-        startDate = subMonths(now, 3);
-        break;
-      case "1year":
-        startDate = subYears(now, 1);
-        break;
-      default:
-        startDate = startOfDay(now);
-    }
-
-    return data.filter((r) => {
-      const recordDate = r.createdAt
-        ? new Date(r.createdAt)
-        : new Date(`${r.date}T00:00:00`);
-      return recordDate >= startDate;
-    });
-  }, [data, range]);
-
-  /* -------------------- GROUP -------------------- */
+export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
   const chartData = useMemo(() => {
-    const grouped: Record<
-      string,
-      { present: number; late: number; absent: number }
-    > = {};
+    const last14Days = Array.from({ length: 14 }, (_, i) => {
+      const date = subDays(new Date(), 13 - i);
+      return format(date, "yyyy-MM-dd");
+    });
 
-    filteredData.forEach((r) => {
-      const dateObj = r.createdAt
-        ? new Date(r.createdAt)
-        : new Date(`${r.date}T00:00:00`);
+    return last14Days.map((date) => {
+      const dayRecords = data.filter((r) => r.date === date);
+      const uniqueStudents = new Map<string, AttendanceRecord>();
 
-      const key = format(dateObj, "yyyy-MM-dd");
-
-      if (!grouped[key]) {
-        grouped[key] = { present: 0, late: 0, absent: 0 };
+      for (const record of dayRecords) {
+        const existing = uniqueStudents.get(record.studentId);
+        if (!existing || new Date(record.createdAt) > new Date(existing.createdAt)) {
+          uniqueStudents.set(record.studentId, record);
+        }
       }
 
-      if (r.status === "Present") grouped[key].present++;
-      else if (r.status === "Late") grouped[key].late++;
-      else grouped[key].absent++;
+      const records = Array.from(uniqueStudents.values());
+
+      return {
+        date: format(new Date(date), "MMM d"),
+        present: records.filter((r) => r.status === "Present").length,
+        late: records.filter((r) => r.status === "Late").length,
+        absent: records.filter((r) => r.status === "Absent").length,
+      };
     });
+  }, [data]);
 
-    return Object.entries(grouped)
-      .map(([date, counts]) => ({
-        date,
-        displayDate: format(new Date(date), "MMM dd"),
-        ...counts,
-        total: counts.present + counts.late + counts.absent,
-      }))
-      .sort(
-        (a, b) =>
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-  }, [filteredData]);
-
-  /* -------------------- CUSTOM TOOLTIP -------------------- */
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="rounded-lg border bg-card p-3 shadow-lg">
-          <p className="font-semibold text-foreground mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div
-              key={index}
-              className="flex items-center gap-2 text-sm"
-            >
-              <div
-                className="h-3 w-3 rounded-full"
-                style={{ backgroundColor: entry.fill }}
-              />
-              <span className="text-muted-foreground capitalize">
-                {entry.dataKey}:
-              </span>
-              <span className="font-medium text-foreground">
-                {entry.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  /* -------------------- UI -------------------- */
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-card animate-slide-up">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">
-            Attendance Trend
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Student attendance by selected period
-          </p>
-        </div>
-
-        {/* Range Selector */}
-        <div className="flex gap-2 flex-wrap">
-          {[
-            ["today", "Today"],
-            ["7days", "7 Days"],
-            ["1month", "1 Month"],
-            ["3months", "3 Months"],
-            ["1year", "1 Year"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setRange(key as TimeRange)}
-              className={`px-3 py-1.5 rounded-md text-sm border transition
-                ${
-                  range === key
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background hover:bg-muted"
-                }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold">Attendance Trend</h3>
+        <p className="text-sm text-muted-foreground">Last 14 days overview</p>
       </div>
-
-      {/* Chart */}
-      <div className="h-[300px] w-full">
-        {chartData.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-            No attendance data for selected period
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="hsl(var(--border))"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="displayDate"
-                tick={{
-                  fill: "hsl(var(--muted-foreground))",
-                  fontSize: 12,
-                }}
-                axisLine={{ stroke: "hsl(var(--border))" }}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{
-                  fill: "hsl(var(--muted-foreground))",
-                  fontSize: 12,
-                }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
-              />
-              <Legend
-                wrapperStyle={{ paddingTop: 20 }}
-                formatter={(value) => (
-                  <span className="text-sm capitalize text-muted-foreground">
-                    {value}
-                  </span>
-                )}
-              />
-              <Bar
-                dataKey="present"
-                stackId="a"
-                fill="hsl(var(--status-present))"
-                radius={[0, 0, 0, 0]}
-              />
-              <Bar
-                dataKey="late"
-                stackId="a"
-                fill="hsl(var(--status-late))"
-                radius={[0, 0, 0, 0]}
-              />
-              <Bar
-                dataKey="absent"
-                stackId="a"
-                fill="hsl(var(--status-absent))"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      <div className="h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="colorLate" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="colorAbsent" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              className="text-muted-foreground"
+            />
+            <YAxis
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              className="text-muted-foreground"
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "8px",
+                boxShadow: "var(--shadow-md)",
+              }}
+              labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+            />
+            <Legend />
+            <Area
+              type="monotone"
+              dataKey="present"
+              name="Present"
+              stroke="hsl(142, 76%, 36%)"
+              fillOpacity={1}
+              fill="url(#colorPresent)"
+              strokeWidth={2}
+            />
+            <Area
+              type="monotone"
+              dataKey="late"
+              name="Late"
+              stroke="hsl(38, 92%, 50%)"
+              fillOpacity={1}
+              fill="url(#colorLate)"
+              strokeWidth={2}
+            />
+            <Area
+              type="monotone"
+              dataKey="absent"
+              name="Absent"
+              stroke="hsl(0, 84%, 60%)"
+              fillOpacity={1}
+              fill="url(#colorAbsent)"
+              strokeWidth={2}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
