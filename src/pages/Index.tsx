@@ -7,20 +7,46 @@ import { AttendanceTable } from "@/components/dashboard/AttendanceTable";
 import { DailyAttendanceChart } from "@/components/dashboard/DailyAttendanceChart";
 import { StatusDistributionChart } from "@/components/dashboard/StatusDistributionChart";
 import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
-import { AttendanceStatus, AttendanceRecord } from "@/types/attendance";
+import { AttendanceRecord } from "@/types/attendance";
 import { format } from "date-fns";
+
+
+type NormalizedStatus = "present" | "late" | "absent";
+
+const normalizeStatus = (status?: string): NormalizedStatus => {
+  const value = status?.trim().toLowerCase();
+  if (value === "present") return "present";
+  if (value === "late") return "late";
+  return "absent";
+};
+
+const normalizeDate = (date: string) =>
+  format(new Date(date), "yyyy-MM-dd");
+
+/* ======================
+   Page
+====================== */
 
 const Index = () => {
   const [data, setData] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [studentIdSearch, setStudentIdSearch] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus | "all">("all");
+  const [selectedStatus, setSelectedStatus] =
+    useState<NormalizedStatus | "all">("all");
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     const sheetData = await fetchAttendanceFromSheet();
-    setData(sheetData);
+
+    /* 🔥 Normalize ตั้งแต่ตรงนี้ */
+    const normalized = sheetData.map((r) => ({
+      ...r,
+      date: normalizeDate(r.date),
+      status: normalizeStatus(r.status),
+    }));
+
+    setData(normalized);
     setIsLoading(false);
   }, []);
 
@@ -28,43 +54,74 @@ const Index = () => {
     loadData();
   }, [loadData]);
 
+  /* ======================
+     Filters
+  ====================== */
+
   const filteredData = useMemo(() => {
     return data.filter((record) => {
-      if (selectedDate && record.date !== format(selectedDate, "yyyy-MM-dd")) {
+      if (
+        selectedDate &&
+        record.date !== format(selectedDate, "yyyy-MM-dd")
+      )
         return false;
-      }
+
       if (
         studentIdSearch &&
-        !record.studentId.toLowerCase().includes(studentIdSearch.toLowerCase())
-      ) {
+        !record.studentId
+          .toLowerCase()
+          .includes(studentIdSearch.toLowerCase())
+      )
         return false;
-      }
-      if (selectedStatus !== "all" && record.status !== selectedStatus) {
+
+      if (
+        selectedStatus !== "all" &&
+        record.status !== selectedStatus
+      )
         return false;
-      }
+
       return true;
     });
   }, [data, selectedDate, studentIdSearch, selectedStatus]);
+
+  /* ======================
+     Today Stats
+  ====================== */
 
   const todayStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
     const todayRecords = data.filter((r) => r.date === today);
 
     const latestMap = new Map<string, AttendanceRecord>();
+
     for (const record of todayRecords) {
       const existing = latestMap.get(record.studentId);
-      if (!existing || new Date(record.createdAt) > new Date(existing.createdAt)) {
+      if (
+        !existing ||
+        new Date(record.createdAt).getTime() >
+          new Date(existing.createdAt).getTime()
+      ) {
         latestMap.set(record.studentId, record);
       }
     }
 
     const latestRecords = Array.from(latestMap.values());
 
+    const counts = {
+      present: 0,
+      late: 0,
+      absent: 0,
+    };
+
+    for (const r of latestRecords) {
+      counts[r.status as NormalizedStatus]++;
+    }
+
     return {
       total: latestRecords.length,
-      present: latestRecords.filter((r) => r.status === "Present").length,
-      late: latestRecords.filter((r) => r.status === "Late").length,
-      absent: latestRecords.filter((r) => r.status === "Absent").length,
+      present: counts.present,
+      late: counts.late,
+      absent: counts.absent,
     };
   }, [data]);
 
@@ -72,12 +129,16 @@ const Index = () => {
     return new Set(data.map((r) => r.studentId)).size;
   }, [data]);
 
+  /* ======================
+     Render
+  ====================== */
+
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 px-3 sm:px-6 lg:px-8 animate-fade-in">
       <DashboardHeader onRefresh={loadData} isLoading={isLoading} />
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Students"
           value={uniqueStudents}
@@ -85,14 +146,21 @@ const Index = () => {
           icon={Users}
           variant="info"
         />
+
         <StatCard
           title="Present Today"
           value={todayStats.present}
-          subtitle={`${todayStats.total > 0 ? Math.round((todayStats.present / todayStats.total) * 100) : 0}% attendance`}
+          subtitle={`${
+            todayStats.total > 0
+              ? Math.round(
+                  (todayStats.present / todayStats.total) * 100
+                )
+              : 0
+          }% attendance`}
           icon={UserCheck}
           variant="present"
-          trend={todayStats.total > 0 ? { value: 5, isPositive: true } : undefined}
         />
+
         <StatCard
           title="Late Today"
           value={todayStats.late}
@@ -100,6 +168,7 @@ const Index = () => {
           icon={Clock}
           variant="late"
         />
+
         <StatCard
           title="Absent Today"
           value={todayStats.absent}
@@ -109,27 +178,18 @@ const Index = () => {
         />
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* Charts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 overflow-x-auto">
           <DailyAttendanceChart data={data} />
         </div>
-        <div>
+        <div className="overflow-x-auto">
           <StatusDistributionChart data={data} />
         </div>
       </div>
 
-      {/* Records Section */}
+      {/* Records */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Attendance Records</h2>
-            <p className="text-sm text-muted-foreground">
-              View and filter all attendance records
-            </p>
-          </div>
-        </div>
-
         <AttendanceFilters
           selectedDate={selectedDate}
           onDateChange={setSelectedDate}
@@ -139,13 +199,9 @@ const Index = () => {
           onStatusChange={setSelectedStatus}
         />
 
-        <AttendanceTable data={filteredData} />
-
-        {filteredData.length > 50 && (
-          <p className="text-sm text-muted-foreground text-center">
-            Showing 50 of {filteredData.length} records
-          </p>
-        )}
+        <div className="overflow-x-auto rounded-lg border">
+          <AttendanceTable data={filteredData} />
+        </div>
       </div>
     </div>
   );
