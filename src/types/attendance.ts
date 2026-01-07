@@ -26,6 +26,19 @@ export interface StatusDistribution {
   percentage: number;
 }
 
+export interface StudentSummary {
+  studentId: string;
+  fullName: string;
+  image: string;
+  totalDays: number;
+  presentDays: number;
+  lateDays: number;
+  absentDays: number;
+  attendanceRate: number;
+  lastSeen: string;
+}
+
+
 export type TimeRange =
   | "today"
   | "7days"
