@@ -37,11 +37,11 @@ export function AttendanceFilters({
 }: AttendanceFiltersProps) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      {/* Search: ID + Name */}
+      {/* Search */}
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by student ID or name..."
+          placeholder="Search by student ID, name, or subject..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           className="pl-10"
@@ -72,7 +72,7 @@ export function AttendanceFilters({
         </PopoverContent>
       </Popover>
 
-      {/* Status Filter (lowercase values) */}
+      {/* Status Filter */}
       <Select
         value={selectedStatus}
         onValueChange={(v) =>
@@ -91,7 +91,7 @@ export function AttendanceFilters({
         </SelectContent>
       </Select>
 
-      {/* Clear */}
+      {/* Clear Filters */}
       {(selectedDate || searchQuery || selectedStatus !== "all") && (
         <Button
           variant="ghost"
