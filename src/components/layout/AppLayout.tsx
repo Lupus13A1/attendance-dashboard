@@ -8,19 +8,17 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar />
-      <div
-        className={cn(
-          "flex flex-col transition-all duration-300",
-          sidebarCollapsed ? "ml-16" : "ml-64"
-        )}
-      >
-        <AppHeader />
-        <main className="flex-1 p-6">{children}</main>
+      {/* Sidebar */}
+      <AppSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* Main */}
+      <div className="flex flex-col sm:ml-64">
+        <AppHeader onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 p-3 sm:p-6">{children}</main>
       </div>
     </div>
   );

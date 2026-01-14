@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, subDays } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -31,6 +31,20 @@ import {
 import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
 import { AttendanceRecord } from "@/types/attendance";
 
+/* =====================
+   FIX: helpers (logic only)
+===================== */
+
+const normalizeDate = (date: string) =>
+  format(new Date(date), "yyyy-MM-dd");
+
+const normalizeStatus = (status?: string) => {
+  const v = status?.trim().toLowerCase();
+  if (v === "present") return "Present";
+  if (v === "late") return "Late";
+  return "Absent";
+};
+
 const Reports = () => {
   const [data, setData] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,89 +60,116 @@ const Reports = () => {
     loadData();
   }, []);
 
+  /* =====================
+     FIX: weeklyData logic
+  ===================== */
   const weeklyData = useMemo(() => {
     const days = parseInt(timeRange);
-    const dateArray = Array.from({ length: days }, (_, i) => {
-      const date = subDays(new Date(), days - 1 - i);
-      return format(date, "yyyy-MM-dd");
-    });
+
+    const dateArray = Array.from({ length: days }, (_, i) =>
+      format(subDays(new Date(), days - 1 - i), "yyyy-MM-dd")
+    );
 
     return dateArray.map((date) => {
-      const dayRecords = data.filter((r) => r.date === date);
+      const dayRecords = data.filter(
+        (r) => normalizeDate(r.date) === date
+      );
+
       const uniqueStudents = new Map<string, AttendanceRecord>();
 
       for (const record of dayRecords) {
         const existing = uniqueStudents.get(record.studentId);
-        if (!existing || new Date(record.createdAt) > new Date(existing.createdAt)) {
+        if (
+          !existing ||
+          new Date(record.createdAt) > new Date(existing.createdAt)
+        ) {
           uniqueStudents.set(record.studentId, record);
         }
       }
 
-      const records = Array.from(uniqueStudents.values());
+      const records = Array.from(uniqueStudents.values()).map(
+        (r) => ({
+          ...r,
+          status: normalizeStatus(r.status),
+        })
+      );
+
+      const present = records.filter((r) => r.status === "Present").length;
+      const late = records.filter((r) => r.status === "Late").length;
+      const absent = records.filter((r) => r.status === "Absent").length;
+      const total = records.length;
 
       return {
         date: format(new Date(date), "MMM d"),
-        present: records.filter((r) => r.status === "Present").length,
-        late: records.filter((r) => r.status === "Late").length,
-        absent: records.filter((r) => r.status === "Absent").length,
-        total: records.length,
+        present,
+        late,
+        absent,
+        total,
         attendanceRate:
-          records.length > 0
-            ? Math.round(
-                ((records.filter((r) => r.status === "Present").length +
-                  records.filter((r) => r.status === "Late").length) /
-                  records.length) *
-                  100
-              )
+          total > 0
+            ? Math.round(((present + late) / total) * 100)
             : 0,
       };
     });
   }, [data, timeRange]);
 
+  /* =====================
+     FIX: overallStats logic
+  ===================== */
   const overallStats = useMemo(() => {
-    const allRecords = weeklyData.reduce(
-      (acc, day) => ({
-        present: acc.present + day.present,
-        late: acc.late + day.late,
-        absent: acc.absent + day.absent,
-        total: acc.total + day.total,
+    const validDays = weeklyData.filter((d) => d.total > 0);
+
+    const sum = validDays.reduce(
+      (acc, d) => ({
+        present: acc.present + d.present,
+        late: acc.late + d.late,
+        absent: acc.absent + d.absent,
+        total: acc.total + d.total,
       }),
       { present: 0, late: 0, absent: 0, total: 0 }
     );
 
     const avgAttendanceRate =
-      weeklyData.length > 0
+      validDays.length > 0
         ? Math.round(
-            weeklyData.reduce((sum, day) => sum + day.attendanceRate, 0) /
-              weeklyData.filter((d) => d.total > 0).length || 0
+            validDays.reduce((s, d) => s + d.attendanceRate, 0) /
+              validDays.length
           )
         : 0;
 
-    // Calculate trend
-    const recentDays = weeklyData.slice(-3);
-    const earlierDays = weeklyData.slice(0, 3);
+    const recent = validDays.slice(-3);
+    const earlier = validDays.slice(0, 3);
+
     const recentAvg =
-      recentDays.length > 0
-        ? recentDays.reduce((sum, d) => sum + d.attendanceRate, 0) / recentDays.length
+      recent.length > 0
+        ? recent.reduce((s, d) => s + d.attendanceRate, 0) /
+          recent.length
         : 0;
+
     const earlierAvg =
-      earlierDays.length > 0
-        ? earlierDays.reduce((sum, d) => sum + d.attendanceRate, 0) / earlierDays.length
+      earlier.length > 0
+        ? earlier.reduce((s, d) => s + d.attendanceRate, 0) /
+          earlier.length
         : 0;
-    const trend = recentAvg - earlierAvg;
 
     return {
-      ...allRecords,
+      ...sum,
       avgAttendanceRate,
-      trend,
+      trend: recentAvg - earlierAvg,
     };
   }, [weeklyData]);
 
   const TrendIcon = () => {
-    if (overallStats.trend > 2) return <TrendingUp className="h-4 w-4 text-success" />;
-    if (overallStats.trend < -2) return <TrendingDown className="h-4 w-4 text-destructive" />;
+    if (overallStats.trend > 2)
+      return <TrendingUp className="h-4 w-4 text-success" />;
+    if (overallStats.trend < -2)
+      return <TrendingDown className="h-4 w-4 text-destructive" />;
     return <Minus className="h-4 w-4 text-muted-foreground" />;
   };
+
+  /* =====================
+     UI (UNCHANGED)
+  ===================== */
 
   return (
     <div className="space-y-6 animate-fade-in">

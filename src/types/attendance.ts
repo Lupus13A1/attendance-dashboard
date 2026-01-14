@@ -1,15 +1,24 @@
-export type AttendanceStatus = "Present" | "Late" | "Absent";
+// export type AttendanceStatus = "Present" | "Late" | "Absent";
+
+export type AttendanceStatus = "present" | "late" | "absent";
+
 
 export interface AttendanceRecord {
   studentId: string;
   fullName: string;
   date: string;
-  checkInTime: string | null;
-  checkOutTime: string | null;
+  checkInTime: string;
+  checkOutTime: string;
   status: AttendanceStatus;
   image: string;
   createdAt: string;
+  updatedAt: string;
+  subjectCode: string;
+  subjectName: string;
+  section: string;
+  classroom: string;
 }
+
 
 
 export interface DailyAttendanceSummary {
