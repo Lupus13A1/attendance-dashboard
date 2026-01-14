@@ -1,7 +1,8 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { AttendanceRecord } from "@/types/attendance";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
   TableBody,
@@ -15,18 +16,13 @@ import {
   PaginationContent,
   PaginationItem,
   PaginationLink,
-  PaginationNext,
   PaginationPrevious,
+  PaginationNext,
 } from "@/components/ui/pagination";
 import { format } from "date-fns";
-import { ArrowUp, ArrowDown, Clock, LogIn, LogOut } from "lucide-react";
+import { ArrowUp, ArrowDown, Clock, LogIn, LogOut, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 interface AttendanceTableProps {
   data: AttendanceRecord[];
@@ -34,29 +30,31 @@ interface AttendanceTableProps {
 
 const PAGE_SIZE = 10;
 
-type SortKey = "studentId" | "date" | "checkInTime" | "checkOutTime" | "status" | "createdAt";
+type SortKey =
+  | "subjectCode"
+  | "studentId"
+  | "date"
+  | "checkInTime"
+  | "checkOutTime"
+  | "status"
+  | "createdAt"
+  | "updatedAt";
+
 type SortDirection = "asc" | "desc";
 
-const getStatusVariant = (status: string): "present" | "late" | "absent" => {
-  switch (status) {
-    case "Present":
-      return "present";
-    case "Late":
-      return "late";
-    case "Absent":
-      return "absent";
-    default:
-      return "present";
-  }
+/* =======================
+   STATUS → BADGE VARIANT
+======================= */
+const getStatusVariant = (status: AttendanceRecord["status"]): "present" | "late" | "absent" => {
+  if (status === "present") return "present";
+  if (status === "late") return "late";
+  return "absent";
 };
 
-const getInitials = (name: string): string =>
-  name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+/* =======================
+   HELPER: DISPLAY VALUE
+======================= */
+const displayValue = (value?: string | null) => (value && value !== "-" ? value : "-");
 
 export function AttendanceTable({ data }: AttendanceTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,20 +71,23 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
     }
   };
 
+  /* =======================
+     SORT DATA
+  ======================= */
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => {
       const aVal = a[sortKey] ?? "";
       const bVal = b[sortKey] ?? "";
 
-      if (sortKey === "createdAt") {
+      if (sortKey === "createdAt" || sortKey === "updatedAt" || sortKey === "date") {
         return sortDirection === "asc"
           ? new Date(aVal).getTime() - new Date(bVal).getTime()
           : new Date(bVal).getTime() - new Date(aVal).getTime();
       }
 
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
+      return sortDirection === "asc"
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
     });
   }, [data, sortKey, sortDirection]);
 
@@ -98,13 +99,7 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
   }, [sortedData, currentPage]);
 
   const SortIcon = ({ column }: { column: SortKey }) =>
-    sortKey === column ? (
-      sortDirection === "asc" ? (
-        <ArrowUp className="ml-1 h-3 w-3" />
-      ) : (
-        <ArrowDown className="ml-1 h-3 w-3" />
-      )
-    ) : null;
+    sortKey === column ? (sortDirection === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />) : null;
 
   return (
     <>
@@ -112,95 +107,93 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead className="w-[200px]">Student</TableHead>
-              <TableHead
-                className="cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => handleSort("studentId")}
-              >
+              <TableHead onClick={() => handleSort("subjectCode")} className="cursor-pointer w-[260px]">
                 <div className="flex items-center">
-                  ID <SortIcon column="studentId" />
+                  <BookOpen className="mr-1 h-3 w-3" />
+                  Subject <SortIcon column="subjectCode" />
                 </div>
               </TableHead>
-              <TableHead
-                className="cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => handleSort("date")}
-              >
-                <div className="flex items-center">
-                  Date <SortIcon column="date" />
-                </div>
+
+              <TableHead>Section</TableHead>
+              <TableHead>Room</TableHead>
+              <TableHead>Student</TableHead>
+              <TableHead>Student</TableHead>
+
+
+              <TableHead onClick={() => handleSort("studentId")} className="cursor-pointer">
+                <div className="flex items-center">ID <SortIcon column="studentId" /></div>
               </TableHead>
-              <TableHead
-                className="cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => handleSort("checkInTime")}
-              >
-                <div className="flex items-center">
-                  <LogIn className="mr-1 h-3 w-3" />
-                  Check-in <SortIcon column="checkInTime" />
-                </div>
+
+              <TableHead onClick={() => handleSort("date")} className="cursor-pointer">
+                <div className="flex items-center">Date <SortIcon column="date" /></div>
               </TableHead>
-              <TableHead
-                className="cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => handleSort("checkOutTime")}
-              >
-                <div className="flex items-center">
-                  <LogOut className="mr-1 h-3 w-3" />
-                  Check-out <SortIcon column="checkOutTime" />
-                </div>
+
+              <TableHead onClick={() => handleSort("checkInTime")} className="cursor-pointer">
+                <div className="flex items-center"><LogIn className="mr-1 h-3 w-3" />Check-in <SortIcon column="checkInTime" /></div>
               </TableHead>
+
+              <TableHead onClick={() => handleSort("checkOutTime")} className="cursor-pointer">
+                <div className="flex items-center"><LogOut className="mr-1 h-3 w-3" />Check-out <SortIcon column="checkOutTime" /></div>
+              </TableHead>
+
               <TableHead>Status</TableHead>
-              <TableHead
-                className="cursor-pointer hover:text-foreground transition-colors"
-                onClick={() => handleSort("createdAt")}
-              >
-                <div className="flex items-center">
-                  <Clock className="mr-1 h-3 w-3" />
-                  Recorded <SortIcon column="createdAt" />
-                </div>
+
+              <TableHead onClick={() => handleSort("createdAt")} className="cursor-pointer">
+                <div className="flex items-center"><Clock className="mr-1 h-3 w-3" />Created <SortIcon column="createdAt" /></div>
               </TableHead>
+
+              <TableHead onClick={() => handleSort("updatedAt")} className="cursor-pointer">Updated</TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
             {paginatedData.map((record) => (
-              <TableRow
-                key={record.id}
-                className="group hover:bg-muted/30 transition-colors"
-              >
+              <TableRow key={`${record.studentId}-${record.createdAt}`} className="group hover:bg-muted/30 transition-colors">
                 <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      className="h-9 w-9 cursor-pointer ring-2 ring-transparent group-hover:ring-primary/20 transition-all"
-                      onClick={() =>
-                        setSelectedImage({
-                          src: record.image,
-                          name: record.fullName,
-                        })
-                      }
-                    >
-                      <AvatarImage src={record.image} alt={record.fullName} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                        {getInitials(record.fullName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="font-medium">{record.fullName}</span>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{displayValue(record.subjectCode)}</span>
+                    <span className="text-xs text-muted-foreground">{displayValue(record.subjectName)}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {record.studentId}
-                </TableCell>
-                <TableCell>{format(new Date(record.date), "MMM d, yyyy")}</TableCell>
-                <TableCell className="font-mono text-sm">
-                  {record.checkInTime ?? "—"}
-                </TableCell>
-                <TableCell className="font-mono text-sm">
-                  {record.checkOutTime ?? "—"}
-                </TableCell>
+
+                <TableCell>{displayValue(record.section)}</TableCell>
+                <TableCell>{displayValue(record.classroom)}</TableCell>
+
                 <TableCell>
-                  <Badge variant={getStatusVariant(record.status)}>
-                    {record.status}
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    {record.image?.trim() ? (
+                      <div
+                        className="relative h-9 w-9 cursor-pointer overflow-hidden rounded-md border"
+                        onClick={() => setSelectedImage({ src: record.image, name: displayValue(record.fullName) })}
+                      >
+                        <img src={record.image} alt={`Scan image of ${record.fullName}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                      </div>
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-md border text-xs text-muted-foreground">-</div>
+                    )}
+                    <span className="font-medium">{displayValue(record.fullName)}</span>
+                  </div>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {format(new Date(record.createdAt), "MMM d, HH:mm")}
+
+                <TableCell className="font-mono text-sm">{displayValue(record.studentId)}</TableCell>
+
+                {/* แสดงวันที่ dd/MM/yy */}
+                <TableCell>{record.date ? format(new Date(record.date), "dd/MM/yy") : "-"}</TableCell>
+
+                <TableCell className="font-mono">{displayValue(record.checkInTime)}</TableCell>
+                <TableCell className="font-mono">{displayValue(record.checkOutTime)}</TableCell>
+
+                <TableCell>
+                  <Badge variant={getStatusVariant(record.status)}>{record.status || "-"}</Badge>
+                </TableCell>
+
+                {/* createdAt / updatedAt dd/MM/yy HH:mm */}
+                <TableCell className="text-muted-foreground">
+                  {record.createdAt ? format(new Date(record.createdAt), "dd/MM/yy HH:mm") : "-"}
+                </TableCell>
+
+                <TableCell className="text-muted-foreground">
+                  {record.updatedAt ? format(new Date(record.updatedAt), "dd/MM/yy HH:mm") : "-"}
                 </TableCell>
               </TableRow>
             ))}
@@ -208,57 +201,56 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
         </Table>
       </div>
 
+      {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground">
-            Showing {(currentPage - 1) * PAGE_SIZE + 1} to{" "}
-            {Math.min(currentPage * PAGE_SIZE, sortedData.length)} of{" "}
-            {sortedData.length} records
-          </p>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  className={cn(currentPage === 1 && "pointer-events-none opacity-50")}
-                />
-              </PaginationItem>
-              {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
-                const pageNum = i + 1;
-                return (
-                  <PaginationItem key={pageNum}>
-                    <PaginationLink
-                      isActive={currentPage === pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </PaginationLink>
-                  </PaginationItem>
-                );
-              })}
-              <PaginationItem>
-                <PaginationNext
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                  className={cn(currentPage === totalPages && "pointer-events-none opacity-50")}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious asChild disabled={currentPage === 1}>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className={cn("flex items-center gap-1 px-2.5", currentPage === 1 && "opacity-50 cursor-not-allowed")}
+                >
+                  <ChevronLeft className="h-4 w-4" /> Previous
+                </button>
+              </PaginationPrevious>
+            </PaginationItem>
+
+            {Array.from({ length: totalPages }).map((_, i) => {
+              const page = i + 1;
+              return (
+                <PaginationItem key={page}>
+                  <PaginationLink asChild isActive={currentPage === page}>
+                    <button onClick={() => setCurrentPage(page)} className="w-9 h-9 flex items-center justify-center rounded-md">{page}</button>
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            })}
+
+            <PaginationItem>
+              <PaginationNext asChild disabled={currentPage === totalPages}>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className={cn("flex items-center gap-1 px-2.5", currentPage === totalPages && "opacity-50 cursor-not-allowed")}
+                >
+                  Next <ChevronRight className="h-4 w-4" />
+                </button>
+              </PaginationNext>
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       )}
 
+      {/* IMAGE PREVIEW */}
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{selectedImage?.name}</DialogTitle>
           </DialogHeader>
+
           {selectedImage && (
             <div className="flex justify-center">
-              <img
-                src={selectedImage.src}
-                alt={selectedImage.name}
-                className="rounded-lg max-h-96 object-cover"
-              />
+              <img src={selectedImage.src} alt={selectedImage.name} className="max-h-96 w-full rounded-lg object-contain" />
             </div>
           )}
         </DialogContent>
