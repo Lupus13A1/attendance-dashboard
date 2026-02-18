@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, Download, UserPlus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,8 +14,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
+import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
 import { AttendanceRecord, StudentSummary } from "@/types/attendance";
+
 import { StudentDetailDialog } from "@/components/students/StudentDetailDialog";
 import {
   defaultFilters,
@@ -28,54 +30,54 @@ const Students = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] =
     useState<StudentFilterValues>(defaultFilters);
+
   const [selectedStudent, setSelectedStudent] =
     useState<StudentSummary | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  /* =======================
-     LOAD DATA
-  ======================= */
+  /* ======================= LOAD DATA ======================= */
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      const sheetData = await fetchAttendanceFromSheet();
-      setData(sheetData ?? []);
+      const firebaseData = await fetchAttendanceFromFirebase();
+      setData(firebaseData ?? []);
       setIsLoading(false);
     };
     loadData();
   }, []);
 
-  /* =======================
-     BUILD STUDENT SUMMARY (FIX)
-  ======================= */
+  /* ======================= BUILD STUDENT SUMMARY ======================= */
   const students = useMemo((): StudentSummary[] => {
     const studentMap = new Map<string, StudentSummary>();
 
     for (const record of data) {
-      if (!record.studentId || !record.fullName) continue;
+      if (!record.userId) continue;
 
-      const status = record.status?.toLowerCase()?.trim();
-
-      const existing = studentMap.get(record.studentId);
+      const status = record.status?.toLowerCase();
+      const existing = studentMap.get(record.userId);
 
       if (!existing) {
-        studentMap.set(record.studentId, {
-          studentId: record.studentId,
-          fullName: record.fullName,
-          image: record.image,
+        studentMap.set(record.userId, {
+          userId: record.userId,
+          fullName: record.fullName ?? "Unknown",
+          image: record.image ?? "",
+
           totalDays: 1,
           presentDays: status === "present" ? 1 : 0,
           lateDays: status === "late" ? 1 : 0,
           absentDays: status === "absent" ? 1 : 0,
+
           attendanceRate: 0,
-          lastSeen: record.date,
+          lastSeen: record.date ?? "",
         });
       } else {
         existing.totalDays++;
+
         if (status === "present") existing.presentDays++;
         if (status === "late") existing.lateDays++;
         if (status === "absent") existing.absentDays++;
-        if (record.date > existing.lastSeen) {
+
+        if (record.date && record.date > existing.lastSeen) {
           existing.lastSeen = record.date;
         }
       }
@@ -94,9 +96,7 @@ const Students = () => {
       .sort((a, b) => b.attendanceRate - a.attendanceRate);
   }, [data]);
 
-  /* =======================
-     FILTERING
-  ======================= */
+  /* ======================= FILTERING ======================= */
   const filteredStudents = useMemo(() => {
     let result = students;
 
@@ -105,7 +105,7 @@ const Students = () => {
       result = result.filter(
         (s) =>
           s.fullName.toLowerCase().includes(q) ||
-          s.studentId.toLowerCase().includes(q)
+          s.userId.toLowerCase().includes(q)
       );
     }
 
@@ -125,12 +125,13 @@ const Students = () => {
 
     result = [...result].sort((a, b) => {
       let comparison = 0;
+
       switch (filters.sortBy) {
         case "name":
           comparison = a.fullName.localeCompare(b.fullName);
           break;
         case "id":
-          comparison = a.studentId.localeCompare(b.studentId);
+          comparison = a.userId.localeCompare(b.userId);
           break;
         case "rate":
           comparison = a.attendanceRate - b.attendanceRate;
@@ -139,22 +140,24 @@ const Students = () => {
           comparison = a.lastSeen.localeCompare(b.lastSeen);
           break;
       }
-      return filters.sortOrder === "asc" ? comparison : -comparison;
+
+      return filters.sortOrder === "asc"
+        ? comparison
+        : -comparison;
     });
 
     return result;
   }, [students, searchQuery, filters]);
 
-  /* =======================
-     HELPERS
-  ======================= */
+  /* ======================= HELPERS ======================= */
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.attendanceRateMin > 0 || filters.attendanceRateMax < 100)
       count++;
     if (filters.hasPerfectAttendance) count++;
     if (filters.hasAbsences) count++;
-    if (filters.sortBy !== "rate" || filters.sortOrder !== "desc") count++;
+    if (filters.sortBy !== "rate" || filters.sortOrder !== "desc")
+      count++;
     return count;
   }, [filters]);
 
@@ -172,27 +175,22 @@ const Students = () => {
     return "text-destructive";
   };
 
-  /* =======================
-     RENDER
-  ======================= */
+  /* ======================= RENDER ======================= */
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Students</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Students
+          </h1>
           <p className="text-muted-foreground">
             Manage and view all registered students
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="hidden sm:flex">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Button size="sm" className="hidden sm:flex">
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Student
+            <Download className="mr-2 h-4 w-4" /> Export
           </Button>
         </div>
       </div>
@@ -215,93 +213,68 @@ const Students = () => {
         />
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Students</CardDescription>
-            <CardTitle className="text-3xl">{students.length}</CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Avg. Attendance</CardDescription>
-            <CardTitle className="text-3xl">
-              {students.length > 0
-                ? Math.round(
-                    students.reduce((sum, s) => sum + s.attendanceRate, 0) /
-                      students.length
-                  )
-                : 0}
-              %
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Perfect</CardDescription>
-            <CardTitle className="text-3xl">
-              {students.filter((s) => s.attendanceRate === 100).length}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
       {/* Student Grid */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading
-          ? null
-          : filteredStudents.map((student) => (
-              <Card
-                key={student.studentId}
-                className="cursor-pointer hover:shadow-md"
-                onClick={() => {
-                  setSelectedStudent(student);
-                  setDialogOpen(true);
-                }}
-              >
-                <CardContent className="p-6">
-                  <div className="flex gap-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={student.image} />
-                      <AvatarFallback>
-                        {getInitials(student.fullName)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <h3 className="font-semibold truncate">
-                        {student.fullName}
-                      </h3>
-                      <p className="text-sm text-muted-foreground font-mono">
-                        {student.studentId}
-                      </p>
+        {!isLoading &&
+          filteredStudents.map((student) => (
+            <Card
+              key={student.userId}
+              className="cursor-pointer hover:shadow-md"
+              onClick={() => {
+                setSelectedStudent(student);
+                setDialogOpen(true);
+              }}
+            >
+              <CardContent className="p-6">
+                <div className="flex gap-4">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={student.image} />
+                    <AvatarFallback>
+                      {getInitials(student.fullName)}
+                    </AvatarFallback>
+                  </Avatar>
 
-                      <div className="mt-3">
-                        <div className="flex justify-between text-sm">
-                          <span>Attendance</span>
-                          <span
-                            className={`font-semibold ${getStatusColor(
-                              student.attendanceRate
-                            )}`}
-                          >
-                            {student.attendanceRate}%
-                          </span>
-                        </div>
-                        <Progress value={student.attendanceRate} className="h-1.5" />
-                      </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold truncate">
+                      {student.fullName}
+                    </h3>
+                    <p className="text-sm text-muted-foreground font-mono">
+                      {student.userId}
+                    </p>
 
-                      <div className="mt-3 flex gap-1">
-                        <Badge variant="present">{student.presentDays} P</Badge>
-                        <Badge variant="late">{student.lateDays} L</Badge>
-                        <Badge variant="absent">{student.absentDays} A</Badge>
+                    <div className="mt-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Attendance</span>
+                        <span
+                          className={`font-semibold ${getStatusColor(
+                            student.attendanceRate
+                          )}`}
+                        >
+                          {student.attendanceRate}%
+                        </span>
                       </div>
+                      <Progress
+                        value={student.attendanceRate}
+                        className="h-1.5"
+                      />
+                    </div>
+
+                    <div className="mt-3 flex gap-1">
+                      <Badge variant="present">
+                        {student.presentDays} P
+                      </Badge>
+                      <Badge variant="late">
+                        {student.lateDays} L
+                      </Badge>
+                      <Badge variant="absent">
+                        {student.absentDays} A
+                      </Badge>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
       </div>
 
       <StudentDetailDialog

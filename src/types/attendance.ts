@@ -1,22 +1,36 @@
-// export type AttendanceStatus = "Present" | "Late" | "Absent";
+import { Timestamp } from "firebase/firestore";
+
+
 
 export type AttendanceStatus = "present" | "late" | "absent";
 
-
 export interface AttendanceRecord {
-  studentId: string;
+  id: string;               // doc id
+  uid: string;
+
+  studentId: string;        // users.id
   fullName: string;
-  date: string;
-  checkInTime: string;
-  checkOutTime: string;
+  image?: string | null;
+
+  timestamp: Date | null;
+  type: string;             // check-in | check-out
   status: AttendanceStatus;
+
+  createdAt?: Date | null;
+}
+
+export interface StudentSummary {
+  userId: string;
+  fullName: string;
   image: string;
-  createdAt: string;
-  updatedAt: string;
-  subjectCode: string;
-  subjectName: string;
-  section: string;
-  classroom: string;
+
+  totalDays: number;
+  presentDays: number;
+  lateDays: number;
+  absentDays: number;
+
+  attendanceRate: number;
+  lastSeen: Date;
 }
 
 
@@ -35,17 +49,19 @@ export interface StatusDistribution {
   percentage: number;
 }
 
-export interface StudentSummary {
-  studentId: string;
-  fullName: string;
-  image: string;
-  totalDays: number;
-  presentDays: number;
-  lateDays: number;
-  absentDays: number;
-  attendanceRate: number;
-  lastSeen: string;
-}
+// export interface StudentSummary {
+//   studentId: string;
+//   fullName: string;
+//   image: string;
+//   totalDays: number;
+//   presentDays: number;
+//   lateDays: number;
+//   absentDays: number;
+//   attendanceRate: number;
+//   lastSeen: string;
+// }
+
+
 
 
 export type TimeRange =

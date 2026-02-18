@@ -1,15 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Users, UserCheck, Clock, UserX } from "lucide-react";
+import { format } from "date-fns";
+
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { AttendanceFilters } from "@/components/dashboard/AttendanceFilters";
 import { AttendanceTable } from "@/components/dashboard/AttendanceTable";
 import { DailyAttendanceChart } from "@/components/dashboard/DailyAttendanceChart";
 import { StatusDistributionChart } from "@/components/dashboard/StatusDistributionChart";
-import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
-import { AttendanceRecord } from "@/types/attendance";
-import { format } from "date-fns";
 
+import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
+import { AttendanceRecord } from "@/types/attendance";
+
+/* ======================
+   Types / Utils
+====================== */
 
 type NormalizedStatus = "present" | "late" | "absent";
 
@@ -20,9 +25,6 @@ const normalizeStatus = (status?: string): NormalizedStatus => {
   return "absent";
 };
 
-const normalizeDate = (date: string) =>
-  format(new Date(date), "yyyy-MM-dd");
-
 /* ======================
    Page
 ====================== */
@@ -30,21 +32,27 @@ const normalizeDate = (date: string) =>
 const Index = () => {
   const [data, setData] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
-  const [studentIdSearch, setStudentIdSearch] = useState("");
+  const [userIdSearch, setUserIdSearch] = useState("");
   const [selectedStatus, setSelectedStatus] =
     useState<NormalizedStatus | "all">("all");
 
+  /* ======================
+     Load data
+  ====================== */
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const sheetData = await fetchAttendanceFromSheet();
 
-    /* 🔥 Normalize ตั้งแต่ตรงนี้ */
-    const normalized = sheetData.map((r) => ({
-      ...r,
-      date: normalizeDate(r.date),
-      status: normalizeStatus(r.status),
-    }));
+    const firebaseData = await fetchAttendanceFromFirebase();
+
+    const normalized = firebaseData
+      .filter((r) => r.date) // กัน null
+      .map((r) => ({
+        ...r,
+        status: normalizeStatus(r.status),
+      }));
 
     setData(normalized);
     setIsLoading(false);
@@ -60,29 +68,34 @@ const Index = () => {
 
   const filteredData = useMemo(() => {
     return data.filter((record) => {
+      if (!record.date) return false;
+
       if (
         selectedDate &&
         record.date !== format(selectedDate, "yyyy-MM-dd")
-      )
+      ) {
         return false;
+      }
 
       if (
-        studentIdSearch &&
-        !record.studentId
+        userIdSearch &&
+        !record.userId
           .toLowerCase()
-          .includes(studentIdSearch.toLowerCase())
-      )
+          .includes(userIdSearch.toLowerCase())
+      ) {
         return false;
+      }
 
       if (
         selectedStatus !== "all" &&
         record.status !== selectedStatus
-      )
+      ) {
         return false;
+      }
 
       return true;
     });
-  }, [data, selectedDate, studentIdSearch, selectedStatus]);
+  }, [data, selectedDate, userIdSearch, selectedStatus]);
 
   /* ======================
      Today Stats
@@ -90,18 +103,22 @@ const Index = () => {
 
   const todayStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const todayRecords = data.filter((r) => r.date === today);
+    const todayRecords = data.filter((r) => r.date && format(new Date(r.date), "yyyy-MM-dd") === today);
 
+    // เอา record ล่าสุดของแต่ละ user
     const latestMap = new Map<string, AttendanceRecord>();
 
     for (const record of todayRecords) {
-      const existing = latestMap.get(record.studentId);
+      if (!record.createdAt) continue;
+
+      const existing = latestMap.get(record.userId);
       if (
         !existing ||
-        new Date(record.createdAt).getTime() >
-          new Date(existing.createdAt).getTime()
+        (existing.createdAt &&
+          new Date(record.createdAt).getTime() >
+            new Date(existing.createdAt).getTime())
       ) {
-        latestMap.set(record.studentId, record);
+        latestMap.set(record.userId, record);
       }
     }
 
@@ -125,8 +142,8 @@ const Index = () => {
     };
   }, [data]);
 
-  const uniqueStudents = useMemo(() => {
-    return new Set(data.map((r) => r.studentId)).size;
+  const uniqueUsers = useMemo(() => {
+    return new Set(data.map((r) => r.userId)).size;
   }, [data]);
 
   /* ======================
@@ -141,7 +158,7 @@ const Index = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Students"
-          value={uniqueStudents}
+          value={uniqueUsers}
           subtitle="Registered students"
           icon={Users}
           variant="info"
@@ -164,7 +181,7 @@ const Index = () => {
         <StatCard
           title="Late Today"
           value={todayStats.late}
-          subtitle="Arrived after 9:00 AM"
+          subtitle="Arrived after class time"
           icon={Clock}
           variant="late"
         />
@@ -193,8 +210,8 @@ const Index = () => {
         <AttendanceFilters
           selectedDate={selectedDate}
           onDateChange={setSelectedDate}
-          studentIdSearch={studentIdSearch}
-          onStudentIdSearchChange={setStudentIdSearch}
+          studentIdSearch={userIdSearch}          // reuse component เดิม
+          onStudentIdSearchChange={setUserIdSearch}
           selectedStatus={selectedStatus}
           onStatusChange={setSelectedStatus}
         />

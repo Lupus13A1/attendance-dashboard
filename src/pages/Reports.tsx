@@ -13,6 +13,7 @@ import {
   Legend,
 } from "recharts";
 import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,15 +29,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
+
+import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
 import { AttendanceRecord } from "@/types/attendance";
 
 /* =====================
-   FIX: helpers (logic only)
+   helpers
 ===================== */
-
-const normalizeDate = (date: string) =>
-  format(new Date(date), "yyyy-MM-dd");
 
 const normalizeStatus = (status?: string) => {
   const v = status?.trim().toLowerCase();
@@ -50,49 +49,55 @@ const Reports = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("7");
 
+  /* =====================
+     Load Firebase data
+  ===================== */
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      const sheetData = await fetchAttendanceFromSheet();
-      setData(sheetData);
+      const firebaseData = await fetchAttendanceFromFirebase();
+      setData(firebaseData.filter((r) => r.date)); // กัน null
       setIsLoading(false);
     };
     loadData();
   }, []);
 
   /* =====================
-     FIX: weeklyData logic
+     Weekly data
   ===================== */
+
   const weeklyData = useMemo(() => {
-    const days = parseInt(timeRange);
+    const days = parseInt(timeRange, 10);
 
     const dateArray = Array.from({ length: days }, (_, i) =>
       format(subDays(new Date(), days - 1 - i), "yyyy-MM-dd")
     );
 
     return dateArray.map((date) => {
-      const dayRecords = data.filter(
-        (r) => normalizeDate(r.date) === date
-      );
+      const dayRecords = data.filter((r) => r.date === date);
 
-      const uniqueStudents = new Map<string, AttendanceRecord>();
+      // เอา record ล่าสุดของแต่ละ user ต่อวัน
+      const latestMap = new Map<string, AttendanceRecord>();
 
       for (const record of dayRecords) {
-        const existing = uniqueStudents.get(record.studentId);
+        if (!record.createdAt) continue;
+
+        const existing = latestMap.get(record.userId);
         if (
           !existing ||
-          new Date(record.createdAt) > new Date(existing.createdAt)
+          (existing.createdAt &&
+            new Date(record.createdAt).getTime() <
+              new Date(record.createdAt).getTime())
         ) {
-          uniqueStudents.set(record.studentId, record);
+          latestMap.set(record.userId, record);
         }
       }
 
-      const records = Array.from(uniqueStudents.values()).map(
-        (r) => ({
-          ...r,
-          status: normalizeStatus(r.status),
-        })
-      );
+      const records = Array.from(latestMap.values()).map((r) => ({
+        ...r,
+        status: normalizeStatus(r.status),
+      }));
 
       const present = records.filter((r) => r.status === "Present").length;
       const late = records.filter((r) => r.status === "Late").length;
@@ -114,8 +119,9 @@ const Reports = () => {
   }, [data, timeRange]);
 
   /* =====================
-     FIX: overallStats logic
+     Overall stats
   ===================== */
+
   const overallStats = useMemo(() => {
     const validDays = weeklyData.filter((d) => d.total > 0);
 
@@ -168,7 +174,7 @@ const Reports = () => {
   };
 
   /* =====================
-     UI (UNCHANGED)
+     UI
   ===================== */
 
   return (
@@ -205,7 +211,9 @@ const Reports = () => {
           <CardHeader className="pb-2">
             <CardDescription>Average Attendance</CardDescription>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-3xl">{overallStats.avgAttendanceRate}%</CardTitle>
+              <CardTitle className="text-3xl">
+                {overallStats.avgAttendanceRate}%
+              </CardTitle>
               <TrendIcon />
             </div>
           </CardHeader>
@@ -216,47 +224,32 @@ const Reports = () => {
             </p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Present</CardDescription>
-            <CardTitle className="text-3xl text-success">{overallStats.present}</CardTitle>
+            <CardTitle className="text-3xl text-success">
+              {overallStats.present}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.present / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Late</CardDescription>
-            <CardTitle className="text-3xl text-warning">{overallStats.late}</CardTitle>
+            <CardTitle className="text-3xl text-warning">
+              {overallStats.late}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.late / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Absent</CardDescription>
-            <CardTitle className="text-3xl text-destructive">{overallStats.absent}</CardTitle>
+            <CardTitle className="text-3xl text-destructive">
+              {overallStats.absent}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.absent / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
       </div>
 

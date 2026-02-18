@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { format, subDays } from "date-fns";
-import { Calendar as CalendarIcon, Download } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -8,12 +9,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
 import { AttendanceFilters } from "@/components/dashboard/AttendanceFilters";
 import { AttendanceTable } from "@/components/dashboard/AttendanceTable";
-import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
+
+import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
 import { AttendanceRecord, AttendanceStatus } from "@/types/attendance";
+import { useAuth } from "@/context/AuthContext";
 
 const AttendanceHistory = () => {
+  const { user } = useAuth();
+
   const [data, setData] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -23,35 +29,45 @@ const AttendanceHistory = () => {
   });
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
-  const [studentIdSearch, setStudentIdSearch] = useState("");
+  const [userIdSearch, setUserIdSearch] = useState("");
   const [selectedStatus, setSelectedStatus] =
     useState<AttendanceStatus | "all">("all");
 
   const loadData = useCallback(async () => {
-    setIsLoading(true);
-    const sheetData = await fetchAttendanceFromSheet();
+    if (!user) return;
 
-    // normalize status
-    const normalized = sheetData.map((r) => ({
+    setIsLoading(true);
+
+    const firebaseData = await fetchAttendanceFromFirebase(
+      user.uid,
+      user.role
+    );
+
+    const normalized = firebaseData.map((r) => ({
       ...r,
       status: r.status.toLowerCase() as AttendanceStatus,
     }));
 
     setData(normalized);
     setIsLoading(false);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (user) {
+      loadData();
+    }
+  }, [user, loadData]);
 
   const filteredData = useMemo(() => {
     return data.filter((record) => {
-      const recordDate = new Date(record.date);
+      if (!record.timestamp) return false;
+
+      const recordDate = new Date(record.timestamp);
       const toDate = new Date(dateRange.to);
       toDate.setHours(23, 59, 59, 999);
 
-      if (recordDate < dateRange.from || recordDate > toDate) return false;
+      if (recordDate < dateRange.from || recordDate > toDate)
+        return false;
 
       if (selectedDate) {
         if (
@@ -63,36 +79,45 @@ const AttendanceHistory = () => {
       }
 
       if (
-        studentIdSearch &&
+        userIdSearch &&
         !record.studentId
           .toLowerCase()
-          .includes(studentIdSearch.toLowerCase())
+          .includes(userIdSearch.toLowerCase())
       ) {
         return false;
       }
 
-      if (selectedStatus !== "all" && record.status !== selectedStatus) {
+      if (
+        selectedStatus !== "all" &&
+        record.status !== selectedStatus
+      ) {
         return false;
       }
 
       return true;
     });
-  }, [data, dateRange, selectedDate, studentIdSearch, selectedStatus]);
+  }, [data, dateRange, selectedDate, userIdSearch, selectedStatus]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
-    const present = filteredData.filter((r) => r.status === "present").length;
-    const late = filteredData.filter((r) => r.status === "late").length;
-    const absent = filteredData.filter((r) => r.status === "absent").length;
+    const present = filteredData.filter(
+      (r) => r.status === "present"
+    ).length;
+    const late = filteredData.filter(
+      (r) => r.status === "late"
+    ).length;
+    const absent = filteredData.filter(
+      (r) => r.status === "absent"
+    ).length;
 
     return {
       total,
       present,
       late,
       absent,
-      presentRate: total ? Math.round((present / total) * 100) : 0,
-      lateRate: total ? Math.round((late / total) * 100) : 0,
-      absentRate: total ? Math.round((absent / total) * 100) : 0,
+      presentRate: total > 0 ? Math.round((present / total) * 100) : 0,
+      lateRate: total > 0 ? Math.round((late / total) * 100) : 0,
+      absentRate: total > 0 ? Math.round((absent / total) * 100) : 0,
     };
   }, [filteredData]);
 
@@ -110,7 +135,8 @@ const AttendanceHistory = () => {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d")}
+              {format(dateRange.from, "MMM d")} -{" "}
+              {format(dateRange.to, "MMM d")}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="end">
@@ -130,16 +156,28 @@ const AttendanceHistory = () => {
       {/* STATS */}
       <div className="grid gap-4 sm:grid-cols-4">
         <Stat label="Total" value={stats.total} />
-        <Stat label="Present" value={`${stats.present} (${stats.presentRate}%)`} color="text-success" />
-        <Stat label="Late" value={`${stats.late} (${stats.lateRate}%)`} color="text-warning" />
-        <Stat label="Absent" value={`${stats.absent} (${stats.absentRate}%)`} color="text-destructive" />
+        <Stat
+          label="Present"
+          value={`${stats.present} (${stats.presentRate}%)`}
+          color="text-success"
+        />
+        <Stat
+          label="Late"
+          value={`${stats.late} (${stats.lateRate}%)`}
+          color="text-warning"
+        />
+        <Stat
+          label="Absent"
+          value={`${stats.absent} (${stats.absentRate}%)`}
+          color="text-destructive"
+        />
       </div>
 
       <AttendanceFilters
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
-        studentIdSearch={studentIdSearch}
-        onStudentIdSearchChange={setStudentIdSearch}
+        studentIdSearch={userIdSearch}            // 👈 ใช้ช่องเดิมได้
+        onStudentIdSearchChange={setUserIdSearch}
         selectedStatus={selectedStatus}
         onStatusChange={setSelectedStatus}
       />
