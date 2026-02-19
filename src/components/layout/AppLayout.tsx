@@ -1,7 +1,6 @@
 import { ReactNode, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
-import { cn } from "@/lib/utils";
 
 interface AppLayoutProps {
   children: ReactNode;

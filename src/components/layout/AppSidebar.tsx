@@ -50,7 +50,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         className={cn(
           "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
           collapsed ? "w-16" : "w-64",
-          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
+          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0",
         )}
       >
         {/* Header */}
@@ -62,9 +62,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             {!collapsed && (
               <div>
                 <h1 className="text-lg font-bold">AttendEase</h1>
-                <p className="text-xs text-sidebar-muted">
-                  Attendance System
-                </p>
+                <p className="text-xs text-sidebar-muted">Attendance System</p>
               </div>
             )}
           </div>
@@ -94,7 +92,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
                   isActive
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-muted hover:bg-sidebar-accent/50"
+                    : "text-sidebar-muted hover:bg-sidebar-accent/50",
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -105,9 +103,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             return collapsed ? (
               <Tooltip key={item.name}>
                 <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right">
-                  {item.name}
-                </TooltipContent>
+                <TooltipContent side="right">{item.name}</TooltipContent>
               </Tooltip>
             ) : (
               link
