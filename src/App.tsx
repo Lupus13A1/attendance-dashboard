@@ -10,8 +10,8 @@ import AttendanceHistory from "./pages/AttendanceHistory";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
-import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import Login from "./pages/login";
 
 const queryClient = new QueryClient();
 

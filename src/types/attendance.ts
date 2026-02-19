@@ -1,26 +1,40 @@
-// export type AttendanceStatus = "Present" | "Late" | "Absent";
-
 export type AttendanceStatus = "present" | "late" | "absent";
 
+/* =========================
+   1️⃣ RAW LOG FROM FIREBASE
+========================= */
+export interface AttendanceLog {
+  id: string;
+  uid: string;
+  studentId: string;
+  name: string;
+  imgUrl: string | null;
+  status: AttendanceStatus;
+  timestamp: string;
+  type: "check-in" | "check-out";
+}
 
+/* =========================
+   2️⃣ UI / DASHBOARD RECORD
+========================= */
 export interface AttendanceRecord {
   studentId: string;
-  fullName: string;
-  date: string;
-  checkInTime: string;
-  checkOutTime: string;
+  imgUrl: string;
+  rfid: string;
+  name: string;
   status: AttendanceStatus;
-  image: string;
+  timestamp: string;
+  type: "check-in" | "check-out";
+  uid: string;
   createdAt: string;
   updatedAt: string;
-  subjectCode: string;
-  subjectName: string;
   section: string;
   classroom: string;
 }
 
-
-
+/* =========================
+   3️⃣ SUMMARY TYPES
+========================= */
 export interface DailyAttendanceSummary {
   date: string;
   present: number;
@@ -37,7 +51,7 @@ export interface StatusDistribution {
 
 export interface StudentSummary {
   studentId: string;
-  fullName: string;
+  name: string;
   image: string;
   totalDays: number;
   presentDays: number;
@@ -47,10 +61,4 @@ export interface StudentSummary {
   lastSeen: string;
 }
 
-
-export type TimeRange =
-  | "today"
-  | "7days"
-  | "1month"
-  | "3months"
-  | "1year";
+export type TimeRange = "today" | "7days" | "1month" | "3months" | "1year";

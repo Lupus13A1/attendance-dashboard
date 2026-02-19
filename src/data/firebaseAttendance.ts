@@ -7,19 +7,23 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { AttendanceRecord } from "@/types/attendance";
 
+import { db } from "@/lib/firebase";
+import { AttendanceLog, AttendanceStatus } from "@/types/attendance";
+
+/* =====================================================
+   FETCH ATTENDANCE LOGS FROM FIREBASE
+===================================================== */
 export async function fetchAttendanceFromFirebase(
   uid: string,
   role: string,
-): Promise<AttendanceRecord[]> {
+): Promise<AttendanceLog[]> {
   try {
-    let attQuery;
-
     /* =========================
        1️⃣ BUILD QUERY BY ROLE
     ========================== */
+    let attQuery;
+
     if (role === "student") {
       attQuery = query(
         collection(db, "attendanceLogs"),
@@ -33,36 +37,35 @@ export async function fetchAttendanceFromFirebase(
     const attSnap = await getDocs(attQuery);
 
     /* =========================
-       2️⃣ LOAD USERS (เฉพาะกรณีจำเป็น)
+       2️⃣ LOAD USER DATA
     ========================== */
-
-    let userMap = new Map<string, any>();
+    const userMap = new Map<string, any>();
 
     if (role !== "student") {
-      // admin/teacher ต้องรู้ชื่อทุกคน
+      // admin / teacher โหลด users ทั้งหมด
       const usersSnap = await getDocs(collection(db, "users"));
-      usersSnap.forEach((doc) => {
-        userMap.set(doc.id, doc.data());
+      usersSnap.forEach((docSnap) => {
+        userMap.set(docSnap.id, docSnap.data());
       });
     }
 
     /* =========================
-       3️⃣ MAP DATA
+       3️⃣ MAP LOGS
     ========================== */
-    const records: AttendanceRecord[] = [];
+    const records: AttendanceLog[] = [];
 
     for (const docSnap of attSnap.docs) {
       const d = docSnap.data() as {
         uid: string;
         timestamp?: Timestamp;
-        type?: string;
-        status?: string;
+        type?: "check-in" | "check-out";
+        status?: AttendanceStatus;
       };
 
       let userData;
 
       if (role === "student") {
-        // student โหลด profile ตัวเองครั้งเดียว
+        // โหลด profile ตัวเองครั้งเดียว
         if (!userMap.has(uid)) {
           const userDoc = await getDoc(doc(db, "users", uid));
           if (userDoc.exists()) {
@@ -79,17 +82,20 @@ export async function fetchAttendanceFromFirebase(
         uid: d.uid,
 
         studentId: userData?.id ?? "-",
-        fullName: userData
-          ? `${userData.prefix ?? ""} ${userData.name ?? ""}`
+
+        name: userData
+          ? `${userData.prefix ?? ""} ${userData.name ?? ""}`.trim()
           : "Unknown",
 
-        image: userData?.imgUrl ?? null,
+        imgUrl: userData?.imgUrl ?? null,
 
         timestamp:
-          d.timestamp instanceof Timestamp ? d.timestamp.toDate() : null,
+          d.timestamp instanceof Timestamp
+            ? d.timestamp.toDate().toISOString()
+            : "",
 
         type: d.type ?? "check-in",
-        status: (d.status as any) ?? "absent",
+        status: d.status ?? "absent",
       });
     }
 
