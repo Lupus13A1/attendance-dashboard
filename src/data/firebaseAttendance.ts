@@ -1,3 +1,5 @@
+// src/data/firebaseAttendance.ts
+
 import {
   collection,
   getDocs,
@@ -7,101 +9,94 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
-
 import { db } from "@/lib/firebase";
-import { AttendanceLog, AttendanceStatus } from "@/types/attendance";
+import {
+  AttendanceRecord,
+  AttendanceStatus,
+} from "@/types/attendance";
 
-/* =====================================================
-   FETCH ATTENDANCE LOGS FROM FIREBASE
-===================================================== */
 export async function fetchAttendanceFromFirebase(
   uid: string,
-  role: string,
-): Promise<AttendanceLog[]> {
+  role: string
+): Promise<AttendanceRecord[]> {
   try {
     /* =========================
        1️⃣ BUILD QUERY BY ROLE
     ========================== */
-    let attQuery;
+    const attendanceRef = collection(db, "attendanceLogs");
 
-    if (role === "student") {
-      attQuery = query(
-        collection(db, "attendanceLogs"),
-        where("uid", "==", uid),
-      );
-    } else {
-      // admin / teacher
-      attQuery = collection(db, "attendanceLogs");
-    }
+    const attQuery =
+      role === "student"
+        ? query(attendanceRef, where("uid", "==", uid))
+        : attendanceRef;
 
     const attSnap = await getDocs(attQuery);
 
     /* =========================
-       2️⃣ LOAD USER DATA
+       2️⃣ LOAD USERS
     ========================== */
     const userMap = new Map<string, any>();
 
-    if (role !== "student") {
-      // admin / teacher โหลด users ทั้งหมด
+    if (role === "student") {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        userMap.set(uid, userDoc.data());
+      }
+    } else {
       const usersSnap = await getDocs(collection(db, "users"));
-      usersSnap.forEach((docSnap) => {
-        userMap.set(docSnap.id, docSnap.data());
+      usersSnap.forEach((u) => {
+        userMap.set(u.id, u.data());
       });
     }
 
     /* =========================
-       3️⃣ MAP LOGS
+       3️⃣ MAP TO AttendanceRecord
     ========================== */
-    const records: AttendanceLog[] = [];
 
-    for (const docSnap of attSnap.docs) {
-      const d = docSnap.data() as {
-        uid: string;
-        timestamp?: Timestamp;
-        type?: "check-in" | "check-out";
-        status?: AttendanceStatus;
-      };
+    const records: AttendanceRecord[] = attSnap.docs.map(
+      (docSnap) => {
+        const data = docSnap.data();
+        const user = userMap.get(data.uid);
 
-      let userData;
+        /* 🔥 บังคับ check-out = out */
+        const status: AttendanceStatus =
+          data.type === "check-out"
+            ? "out"
+            : data.status
+            ? (data.status.toLowerCase() as AttendanceStatus)
+            : "absent";
 
-      if (role === "student") {
-        // โหลด profile ตัวเองครั้งเดียว
-        if (!userMap.has(uid)) {
-          const userDoc = await getDoc(doc(db, "users", uid));
-          if (userDoc.exists()) {
-            userMap.set(uid, userDoc.data());
-          }
-        }
-        userData = userMap.get(uid);
-      } else {
-        userData = userMap.get(d.uid);
+        const timestampISO =
+          data.timestamp instanceof Timestamp
+            ? data.timestamp.toDate().toISOString()
+            : new Date().toISOString();
+
+        return {
+          id: docSnap.id,
+
+          uid: data.uid ?? "",
+          studentId: user?.id ?? "",
+          rfid: user?.rfid ?? "",
+
+          name: user?.name ?? "Unknown",
+          imgUrl: user?.imgUrl ?? "",
+
+          status,
+          type: data.type ?? "check-in",
+
+          timestamp: timestampISO,
+          createdAt: timestampISO,
+          updatedAt: timestampISO,
+
+          section: user?.section ?? "",
+          classroom: user?.classroom ?? "",
+        };
       }
-
-      records.push({
-        id: docSnap.id,
-        uid: d.uid,
-
-        studentId: userData?.id ?? "-",
-
-        name: userData
-          ? `${userData.prefix ?? ""} ${userData.name ?? ""}`.trim()
-          : "Unknown",
-
-        imgUrl: userData?.imgUrl ?? null,
-
-        timestamp:
-          d.timestamp instanceof Timestamp
-            ? d.timestamp.toDate().toISOString()
-            : "",
-
-        type: d.type ?? "check-in",
-        status: d.status ?? "absent",
-      });
-    }
+    );
 
     return records;
-  } catch (err) {
-    console.error("❌ fetchAttendanceFromFirebase failed:", err);
+  } catch (error) {
+    console.error("❌ fetchAttendanceFromFirebase error:", error);
     return [];
   }
 }

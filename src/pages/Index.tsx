@@ -135,7 +135,7 @@ const Index = () => {
 
   return (
     <div className="space-y-6 px-3 sm:px-6 lg:px-8 animate-fade-in">
-      <DashboardHeader onRefresh={loadData} isLoading={isLoading} />
+      {/* <DashboardHeader onRefresh={loadData} isLoading={isLoading} /> */}
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
