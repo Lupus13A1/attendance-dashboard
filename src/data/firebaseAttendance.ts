@@ -20,9 +20,6 @@ export async function fetchAttendanceFromFirebase(
   role: string
 ): Promise<AttendanceRecord[]> {
   try {
-    /* =========================
-       1️⃣ BUILD QUERY BY ROLE
-    ========================== */
     const attendanceRef = collection(db, "attendanceLogs");
 
     const attQuery =
@@ -32,9 +29,6 @@ export async function fetchAttendanceFromFirebase(
 
     const attSnap = await getDocs(attQuery);
 
-    /* =========================
-       2️⃣ LOAD USERS
-    ========================== */
     const userMap = new Map<string, any>();
 
     if (role === "student") {
@@ -49,50 +43,56 @@ export async function fetchAttendanceFromFirebase(
       });
     }
 
-    /* =========================
-       3️⃣ MAP TO AttendanceRecord
-    ========================== */
+    const records: AttendanceRecord[] = attSnap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      const user = userMap.get(data.uid);
 
-    const records: AttendanceRecord[] = attSnap.docs.map(
-      (docSnap) => {
-        const data = docSnap.data();
-        const user = userMap.get(data.uid);
+      let status: AttendanceStatus ;
 
-        /* 🔥 บังคับ check-out = out */
-        const status: AttendanceStatus =
-          data.type === "check-out"
-            ? "out"
-            : data.status
-            ? (data.status.toLowerCase() as AttendanceStatus)
-            : "absent";
-
-        const timestampISO =
-          data.timestamp instanceof Timestamp
-            ? data.timestamp.toDate().toISOString()
-            : new Date().toISOString();
-
-        return {
-          id: docSnap.id,
-
-          uid: data.uid ?? "",
-          studentId: user?.id ?? "",
-          rfid: user?.rfid ?? "",
-
-          name: user?.name ?? "Unknown",
-          imgUrl: user?.imgUrl ?? "",
-
-          status,
-          type: data.type ?? "check-in",
-
-          timestamp: timestampISO,
-          createdAt: timestampISO,
-          updatedAt: timestampISO,
-
-          section: user?.section ?? "",
-          classroom: user?.classroom ?? "",
-        };
+      if (data.type === "check-out") {
+        status = "out";
+      } else if (data.status) {
+        const s = data.status.toLowerCase();
+        if (s === "present") status = "present";
+        else if (s === "late") status = "late";
+        else if (s === "absent") status = "absent";
       }
-    );
+
+      const dateObj =
+        data.timestamp instanceof Timestamp
+          ? data.timestamp.toDate()
+          : new Date();
+
+      const iso = dateObj.toISOString();
+
+      return {
+        id: docSnap.id,
+
+        uid: data.uid ?? "",
+
+        // ✅ ดึงจาก users
+        studentId: user?.id ?? "",
+
+        rfid: user?.rfid ?? "",
+        name: user?.name ?? "Unknown",
+        imgUrl: user?.imgUrl ?? "",
+        snapshotImg: data.image ?? data.imgUrl ?? null,
+
+
+        status,
+        type: data.type ?? "check-in",
+
+        timestamp: iso,
+        date: iso,
+        createdAt: iso,
+        updatedAt: iso,
+
+        section: user?.section ?? "",
+        classroom: user?.classroom ?? "",
+      };
+    });
+
+
 
     return records;
   } catch (error) {

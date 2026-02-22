@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { format, subDays } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -14,7 +16,7 @@ import { AttendanceFilters } from "@/components/dashboard/AttendanceFilters";
 import { AttendanceTable } from "@/components/dashboard/AttendanceTable";
 
 import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
-import { AttendanceRecord, AttendanceStatus } from "@/types/attendance";
+import { AttendanceRecord } from "@/types/attendance";
 import { useAuth } from "@/context/AuthContext";
 
 const AttendanceHistory = () => {
@@ -31,7 +33,7 @@ const AttendanceHistory = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [studentIdSearch, setStudentIdSearch] = useState("");
   const [selectedStatus, setSelectedStatus] =
-    useState<AttendanceStatus | "all">("all");
+    useState<string>("all"); // 🔥 รองรับ out ด้วย
 
   /* =========================
      LOAD DATA FROM FIREBASE
@@ -46,9 +48,9 @@ const AttendanceHistory = () => {
       user.role
     );
 
-    const normalized = firebaseData.map((r) => ({
+    const normalized = (firebaseData ?? []).map((r) => ({
       ...r,
-      status: r.status.toLowerCase() as AttendanceStatus,
+      status: r.status?.toLowerCase() ?? "unknown",
     }));
 
     setData(normalized);
@@ -62,7 +64,7 @@ const AttendanceHistory = () => {
   }, [user, loadData]);
 
   /* =========================
-     FILTER DATA
+     FILTER DATA (แสดงทุก type รวม out)
   ========================== */
   const filteredData = useMemo(() => {
     return data.filter((record) => {
@@ -87,12 +89,13 @@ const AttendanceHistory = () => {
       if (
         studentIdSearch &&
         !record.studentId
-          .toLowerCase()
+          ?.toLowerCase()
           .includes(studentIdSearch.toLowerCase())
       ) {
         return false;
       }
 
+      // 🔥 status filter รองรับ out
       if (
         selectedStatus !== "all" &&
         record.status !== selectedStatus
@@ -105,17 +108,32 @@ const AttendanceHistory = () => {
   }, [data, dateRange, selectedDate, studentIdSearch, selectedStatus]);
 
   /* =========================
+     CHECK-IN ONLY FOR STATS
+     (ไม่เอา check-out และ out มาคำนวณ)
+  ========================== */
+  const checkInOnly = useMemo(() => {
+    return filteredData.filter(
+      (record) =>
+        record.type === "check-in" &&
+        record.status !== "out"
+    );
+  }, [filteredData]);
+
+  /* =========================
      CALCULATE STATS
   ========================== */
   const stats = useMemo(() => {
-    const total = filteredData.length;
-    const present = filteredData.filter(
+    const total = checkInOnly.length;
+
+    const present = checkInOnly.filter(
       (r) => r.status === "present"
     ).length;
-    const late = filteredData.filter(
+
+    const late = checkInOnly.filter(
       (r) => r.status === "late"
     ).length;
-    const absent = filteredData.filter(
+
+    const absent = checkInOnly.filter(
       (r) => r.status === "absent"
     ).length;
 
@@ -124,15 +142,18 @@ const AttendanceHistory = () => {
       present,
       late,
       absent,
-      presentRate: total ? Math.round((present / total) * 100) : 0,
-      lateRate: total ? Math.round((late / total) * 100) : 0,
-      absentRate: total ? Math.round((absent / total) * 100) : 0,
+      presentRate: total
+        ? Math.round((present / total) * 100)
+        : 0,
+      lateRate: total
+        ? Math.round((late / total) * 100)
+        : 0,
+      absentRate: total
+        ? Math.round((absent / total) * 100)
+        : 0,
     };
-  }, [filteredData]);
+  }, [checkInOnly]);
 
-  /* =========================
-     UI
-  ========================== */
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -153,10 +174,7 @@ const AttendanceHistory = () => {
               {format(dateRange.to, "MMM d")}
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            className="w-auto p-0"
-            align="end"
-          >
+          <PopoverContent className="w-auto p-0" align="end">
             <Calendar
               mode="range"
               selected={dateRange}
@@ -175,7 +193,7 @@ const AttendanceHistory = () => {
 
       {/* STATS */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label="Total" value={stats.total} />
+        <Stat label="Total (Check-in)" value={stats.total} />
         <Stat
           label="Present"
           value={`${stats.present} (${stats.presentRate}%)`}
@@ -213,9 +231,6 @@ const AttendanceHistory = () => {
   );
 };
 
-/* =========================
-   STAT COMPONENT
-========================== */
 const Stat = ({
   label,
   value,

@@ -1,253 +1,253 @@
-import { useState } from "react";
-import { Save, Bell, Clock, Users, Shield, Database } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Save, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  collection,
+  getDocs,
+  addDoc,
+} from "firebase/firestore";
 
 const Settings = () => {
   const { toast } = useToast();
+
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+
   const [settings, setSettings] = useState({
-    schoolName: "Central High School",
-    timezone: "America/New_York",
-    lateThreshold: "09:00",
-    absentThreshold: "10:00",
-    autoRefresh: true,
-    refreshInterval: "30",
-    emailNotifications: true,
-    dailyReport: true,
-    weeklyReport: false,
+    autoAbsentEnabled: true,
+    absentAfterMinutes: 15,
+    lateAfterMinutes: 5,
+    timezone: "Asia/Bangkok",
   });
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Your settings have been updated successfully.",
-    });
+  /* =========================
+     1️⃣ Load Settings
+  ========================== */
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, "systemSettings", "attendance"));
+
+        if (snap.exists()) {
+          setSettings({
+            autoAbsentEnabled: snap.data().autoAbsentEnabled ?? true,
+            absentAfterMinutes: snap.data().absentAfterMinutes ?? 15,
+            lateAfterMinutes: snap.data().lateAfterMinutes ?? 5,
+            timezone: snap.data().timezone ?? "Asia/Bangkok",
+          });
+        }
+      } catch (error) {
+        console.error("Load settings error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
+
+  /* =========================
+     2️⃣ Save Settings
+  ========================== */
+  const handleSave = async () => {
+    try {
+      await setDoc(
+        doc(db, "systemSettings", "attendanceLogs"),
+        {
+          ...settings,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      toast({
+        title: "Settings saved",
+        description: "Attendance settings updated successfully.",
+      });
+    } catch (error) {
+      console.error("Save settings error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings.",
+        variant: "destructive",
+      });
+    }
   };
 
+  /* =========================
+     3️⃣ Auto Absent Test Button
+  ========================== */
+
+const handleAutoAbsent = async () => {
+  try {
+    console.log("🔥 Auto Absent Start");
+
+    const logsSnapshot = await getDocs(collection(db, "attendanceLogs"));
+    const usersSnapshot = await getDocs(collection(db, "users"));
+
+    const now = new Date();
+    const todayString = now.toDateString();
+
+    let createdCount = 0;
+
+    const checkedInToday = new Set<string>();
+    const alreadyAbsentToday = new Set<string>();
+
+    // =========================
+    // 1️⃣ ตรวจ log วันนี้
+    // =========================
+    for (const d of logsSnapshot.docs) {
+      const data = d.data();
+
+      const logTime =
+        data.timestamp?.toDate?.() ??
+        new Date(data.timestamp);
+
+      if (!logTime || isNaN(logTime.getTime())) continue;
+
+      if (logTime.toDateString() !== todayString) continue;
+
+      if (data.type === "check-in") {
+        checkedInToday.add(data.uid);
+      }
+
+      if (data.type === "auto-absent") {
+        alreadyAbsentToday.add(data.uid);
+      }
+    }
+
+    console.log("Checked-in today:", checkedInToday.size);
+    console.log("Already absent today:", alreadyAbsentToday.size);
+
+    // =========================
+    // 2️⃣ Loop ทุก user
+    // =========================
+    for (const userDoc of usersSnapshot.docs) {
+      const user = userDoc.data();
+
+      // ข้าม admin / teacher
+      if (user.role !== "student") continue;
+
+      const uid = userDoc.id;
+
+      // ถ้า check-in แล้ววันนี้ → ข้าม
+      if (checkedInToday.has(uid)) continue;
+
+      // ถ้า absent แล้ววันนี้ → ข้าม
+      if (alreadyAbsentToday.has(uid)) continue;
+
+      console.log("📝 Creating absent for:", uid);
+
+      await addDoc(collection(db, "attendanceLogs"), {
+        uid,
+        name: user.name ?? "",
+        status: "absent",
+        type: "auto-absent",
+        timestamp: now,
+        createdAt: now,
+      });
+
+      createdCount++;
+    }
+
+    console.log("✅ Auto Absent Done");
+    alert(`Created ${createdCount} absent records`);
+  } catch (error) {
+    console.error("❌ Auto absent error:", error);
+    alert("Auto absent failed. Check console.");
+  }
+};
+
+  if (loading) return <div className="p-6">Loading settings...</div>;
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 animate-fade-in px-4">
-      {/* Header */}
+    <div className="mx-auto w-full max-w-3xl space-y-6 p-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
-            Configure your attendance system preferences
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold">Attendance Settings</h1>
         <Button onClick={handleSave}>
           <Save className="mr-2 h-4 w-4" />
           Save Changes
         </Button>
       </div>
 
-      {/* General Settings */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Database className="h-5 w-5 text-primary" />
-            <CardTitle>General</CardTitle>
+            <CardTitle>Auto Absent</CardTitle>
           </div>
-          <CardDescription>Basic system configuration</CardDescription>
+          <CardDescription>
+            Automatically mark students absent if not checked in.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="schoolName">Institution Name</Label>
-              <Input
-                id="schoolName"
-                value={settings.schoolName}
-                onChange={(e) =>
-                  setSettings({ ...settings, schoolName: e.target.value })
-                }
-              />
+
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Enable Auto Absent</Label>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Select
-                value={settings.timezone}
-                onValueChange={(value) =>
-                  setSettings({ ...settings, timezone: value })
-                }
-              >
-                <SelectTrigger id="timezone">
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                  <SelectItem value="America/Chicago">Central Time</SelectItem>
-                  <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                  <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Switch
+              checked={settings.autoAbsentEnabled}
+              onCheckedChange={(checked) =>
+                setSettings({ ...settings, autoAbsentEnabled: checked })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Absent After (minutes)</Label>
+            <Input
+              type="number"
+              value={settings.absentAfterMinutes}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  absentAfterMinutes: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Late After (minutes)</Label>
+            <Input
+              type="number"
+              value={settings.lateAfterMinutes}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  lateAfterMinutes: Number(e.target.value),
+                })
+              }
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Attendance Rules */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <CardTitle>Attendance Rules</CardTitle>
-          </div>
-          <CardDescription>Define attendance status thresholds</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="lateThreshold">Late After</Label>
-              <Input
-                id="lateThreshold"
-                type="time"
-                value={settings.lateThreshold}
-                onChange={(e) =>
-                  setSettings({ ...settings, lateThreshold: e.target.value })
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Students arriving after this time are marked as late
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="absentThreshold">Absent After</Label>
-              <Input
-                id="absentThreshold"
-                type="time"
-                value={settings.absentThreshold}
-                onChange={(e) =>
-                  setSettings({ ...settings, absentThreshold: e.target.value })
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Students not checked in by this time are marked absent
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data Sync */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            <CardTitle>Data Sync</CardTitle>
-          </div>
-          <CardDescription>Configure real-time data synchronization</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Auto Refresh</Label>
-              <p className="text-sm text-muted-foreground">
-                Automatically refresh attendance data
-              </p>
-            </div>
-            <Switch
-              checked={settings.autoRefresh}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, autoRefresh: checked })
-              }
-            />
-          </div>
-          {settings.autoRefresh && (
-            <div className="space-y-2">
-              <Label htmlFor="refreshInterval">Refresh Interval (seconds)</Label>
-              <Select
-                value={settings.refreshInterval}
-                onValueChange={(value) =>
-                  setSettings({ ...settings, refreshInterval: value })
-                }
-              >
-                <SelectTrigger id="refreshInterval" className="w-[200px]">
-                  <SelectValue placeholder="Select interval" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5 seconds</SelectItem>
-                  <SelectItem value="10">10 seconds</SelectItem>
-                  <SelectItem value="30">30 seconds</SelectItem>
-                  <SelectItem value="60">1 minute</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Notifications */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-primary" />
-            <CardTitle>Notifications</CardTitle>
-          </div>
-          <CardDescription>Manage alert and report preferences</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Email Notifications</Label>
-              <p className="text-sm text-muted-foreground">
-                Receive attendance alerts via email
-              </p>
-            </div>
-            <Switch
-              checked={settings.emailNotifications}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, emailNotifications: checked })
-              }
-            />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Daily Report</Label>
-              <p className="text-sm text-muted-foreground">
-                Receive daily attendance summary
-              </p>
-            </div>
-            <Switch
-              checked={settings.dailyReport}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, dailyReport: checked })
-              }
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Weekly Report</Label>
-              <p className="text-sm text-muted-foreground">
-                Receive weekly analytics report
-              </p>
-            </div>
-            <Switch
-              checked={settings.weeklyReport}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, weeklyReport: checked })
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <Button
+        onClick={handleAutoAbsent}
+        disabled={processing}
+        className="bg-red-500 hover:bg-red-600"
+      >
+        {processing ? "Processing..." : "Run Auto Absent Now"}
+      </Button>
     </div>
   );
 };

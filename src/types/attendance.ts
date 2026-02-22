@@ -19,6 +19,7 @@ export interface AttendanceLog {
   studentId: string;
   name: string;
   imgUrl: string | null;
+  snapshotImg: string | null;
 
   status: AttendanceStatus;
   timestamp: string; // ISO string
@@ -38,6 +39,9 @@ export interface AttendanceRecord {
 
   name: string;
   imgUrl: string;
+
+  snapshotImg: string | null;
+
 
   status: AttendanceStatus;
   type: "check-in" | "check-out";
@@ -70,9 +74,17 @@ export interface StatusDistribution {
 }
 
 export interface StudentSummary {
+  // name(fullName: any): import("react").ReactNode;
+  fullName(fullName: any): import("react").ReactNode;
+
+
+  id: string;
+
+  uid: string;
   studentId: string;
-  name: string;
+  // name: string;
   image: string;
+  
 
   totalDays: number;
   presentDays: number;

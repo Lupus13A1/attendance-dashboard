@@ -9,16 +9,21 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User as FirebaseUser,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+
+/* =========================
+   TYPES
+========================= */
+
+export type UserRole = "admin" | "teacher" | "student";
 
 export interface User {
   uid: string;
   name: string;
   email: string;
-  role: string;
+  role: UserRole;
   imgUrl?: string;
 }
 
@@ -26,16 +31,22 @@ interface AuthContextType {
   user: User | null;
   login: (
     email: string,
-    password: string,
+    password: string
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  loading: boolean;
 }
+
+/* =========================
+   CONTEXT
+========================= */
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   /* =========================
      1. Listen Auth State
@@ -44,10 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
+        setLoading(false);
         return;
       }
 
-      // โหลดข้อมูลจาก collection users
       const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
 
       if (userDoc.exists()) {
@@ -56,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...(userDoc.data() as Omit<User, "uid">),
         });
       }
+
+      setLoading(false);
     });
 
     return unsubscribe;
@@ -83,7 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, isAuthenticated: !!user }}
+      value={{
+        user,
+        login,
+        logout,
+        isAuthenticated: !!user,
+        loading,
+      }}
     >
       {children}
     </AuthContext.Provider>

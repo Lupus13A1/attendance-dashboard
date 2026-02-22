@@ -18,13 +18,50 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useAuth, UserRole } from "@/context/AuthContext";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Students", href: "/students", icon: Users },
-  { name: "Attendance", href: "/attendance", icon: Calendar },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Settings", href: "/settings", icon: Settings },
+/* =========================
+   Navigation with Roles
+========================= */
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: any;
+  roles: UserRole[];
+}
+
+const navigation: NavItem[] = [
+  {
+    name: "Dashboard",
+    href: "/",
+    icon: LayoutDashboard,
+    roles: ["admin", "teacher", "student"],
+  },
+  {
+    name: "Students",
+    href: "/students",
+    icon: Users,
+    roles: ["admin", "teacher"],
+  },
+  {
+    name: "Attendance",
+    href: "/attendance",
+    icon: Calendar,
+    roles: ["admin", "teacher", "student"],
+  },
+  {
+    name: "Reports",
+    href: "/reports",
+    icon: BarChart3,
+    roles: ["admin", "teacher"],
+  },
+  {
+    name: "Settings",
+    href: "/settings",
+    icon: Settings,
+    roles: ["admin"],
+  },
 ];
 
 interface AppSidebarProps {
@@ -35,10 +72,10 @@ interface AppSidebarProps {
 export function AppSidebar({ open, onClose }: AppSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
 
   return (
     <>
-      {/* Overlay (mobile) */}
       {open && (
         <div
           className="fixed inset-0 z-30 bg-black/50 sm:hidden"
@@ -50,7 +87,7 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
         className={cn(
           "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
           collapsed ? "w-16" : "w-64",
-          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
         )}
       >
         {/* Header */}
@@ -62,12 +99,13 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
             {!collapsed && (
               <div>
                 <h1 className="text-lg font-bold">AttendEase</h1>
-                <p className="text-xs text-sidebar-muted">Attendance System</p>
+                <p className="text-xs text-sidebar-muted">
+                  Attendance System
+                </p>
               </div>
             )}
           </div>
 
-          {/* Close (mobile) */}
           <Button
             variant="ghost"
             size="icon"
@@ -80,35 +118,39 @@ export function AppSidebar({ open, onClose }: AppSidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {navigation.map((item) => {
-            const isActive = location.pathname === item.href;
+          {navigation
+            .filter((item) => user && item.roles.includes(user.role))
+            .map((item) => {
+              const isActive = location.pathname === item.href;
 
-            const link = (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                onClick={onClose}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-muted hover:bg-sidebar-accent/50",
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {!collapsed && <span>{item.name}</span>}
-              </NavLink>
-            );
+              const link = (
+                <NavLink
+                  key={item.name}
+                  to={item.href}
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-muted hover:bg-sidebar-accent/50"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {!collapsed && <span>{item.name}</span>}
+                </NavLink>
+              );
 
-            return collapsed ? (
-              <Tooltip key={item.name}>
-                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right">{item.name}</TooltipContent>
-              </Tooltip>
-            ) : (
-              link
-            );
-          })}
+              return collapsed ? (
+                <Tooltip key={item.name}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">
+                    {item.name}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                link
+              );
+            })}
         </nav>
 
         {/* Collapse */}

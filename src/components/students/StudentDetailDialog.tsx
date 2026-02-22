@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -21,29 +20,44 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
+
 import {
-  AttendanceLog,
   StudentSummary,
+  AttendanceRecord,
   AttendanceStatus,
 } from "@/types/attendance";
 
-/* =======================
-   PROPS
-======================= */
 interface StudentDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   student: StudentSummary | null;
-  records: AttendanceLog[];
+  records: AttendanceRecord[];
 }
 
-/* =======================
+/* ==========================
    HELPERS
-======================= */
+========================== */
+
 const statusLabel = (status: AttendanceStatus) => {
   if (status === "present") return "Present";
   if (status === "late") return "Late";
   return "Absent";
+};
+
+const getStatusVariant = (
+  status: AttendanceStatus
+):
+  | "present"
+  | "late"
+  | "absent"
+  | "default"
+  | "secondary"
+  | "destructive"
+  | "outline" => {
+  if (status === "present") return "present";
+  if (status === "late") return "late";
+  return "absent";
 };
 
 const getAttendanceRateColor = (rate: number) => {
@@ -52,25 +66,36 @@ const getAttendanceRateColor = (rate: number) => {
   return "text-destructive";
 };
 
-const normalizeDateKey = (timestamp: string) =>
-  format(new Date(timestamp), "yyyy-MM-dd");
+const getInitials = (name?: string) => {
+  if (!name) return "NA";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
 
-/* =======================
+/* ==========================
    COMPONENT
-======================= */
+========================== */
+
 export function StudentDetailDialog({
   open,
   onOpenChange,
   student,
   records,
 }: StudentDetailDialogProps) {
-  /* =======================
+  /* ==========================
      BUILD DAILY RECORDS
-  ======================= */
+     (ignore check-out for status)
+  =========================== */
   const dailyRecords = useMemo(() => {
     if (!student) return [];
 
-    const logs = records.filter((r) => r.studentId === student.studentId);
+    const logs = records.filter(
+      (r) => r.studentId === student.studentId
+    );
 
     const map = new Map<
       string,
@@ -79,120 +104,145 @@ export function StudentDetailDialog({
         checkIn?: string;
         checkOut?: string;
         status: AttendanceStatus;
-        latestTs: number;
       }
     >();
 
     for (const log of logs) {
-      const dayKey = normalizeDateKey(log.timestamp);
-      const time = format(new Date(log.timestamp), "HH:mm");
+      const dateObj = new Date(log.timestamp);
+      if (isNaN(dateObj.getTime())) continue;
 
-      const existing = map.get(dayKey);
+      const dayKey = format(dateObj, "yyyy-MM-dd");
+      const time = format(dateObj, "HH:mm");
 
-      if (!existing) {
+      if (!map.has(dayKey)) {
         map.set(dayKey, {
           date: dayKey,
-          status: log.status,
-          latestTs: new Date(log.timestamp).getTime(),
-          checkIn: log.type === "check-in" ? time : undefined,
-          checkOut: log.type === "check-out" ? time : undefined,
+          status: "absent",
         });
-      } else {
-        if (log.type === "check-in") {
-          existing.checkIn = time;
+      }
+
+      const dayData = map.get(dayKey)!;
+
+      // ✅ ใช้ check-in เป็นตัวกำหนด status เท่านั้น
+      if (log.type === "check-in") {
+        dayData.checkIn = time;
+        if (log.status !== "out") {
+          dayData.status = log.status ?? "absent";
         }
-        if (log.type === "check-out") {
-          existing.checkOut = time;
-        }
-        if (new Date(log.timestamp).getTime() > existing.latestTs) {
-          existing.status = log.status;
-          existing.latestTs = new Date(log.timestamp).getTime();
-        }
+      }
+
+      // ✅ check-out แค่เก็บเวลา ไม่กระทบ status
+      if (log.type === "check-out") {
+        dayData.checkOut = time;
       }
     }
 
     return Array.from(map.values()).sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      (a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   }, [student, records]);
 
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  /* ==========================
+     CALCULATE STATS
+     (ignore status "out")
+  =========================== */
+  const stats = useMemo(() => {
+    const validDays = dailyRecords.filter(
+      (d) => d.status !== "out"
+    );
+
+    const totalDays = validDays.length;
+
+    const presentDays = validDays.filter(
+      (d) => d.status === "present"
+    ).length;
+
+    const lateDays = validDays.filter(
+      (d) => d.status === "late"
+    ).length;
+
+    const absentDays = validDays.filter(
+      (d) => d.status === "absent"
+    ).length;
+``
+    const attendanceRate =
+      totalDays > 0
+        ? Math.round(((presentDays + lateDays) / totalDays) * 100)
+        : 0;
+
+    return {
+      totalDays,
+      presentDays,
+      lateDays,
+      absentDays,
+      attendanceRate,
+    };
+  }, [dailyRecords]);
 
   if (!student) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] p-0 overflow-hidden">
-        {/* ================= Header ================= */}
+        {/* HEADER */}
         <DialogHeader className="p-6 pb-4 border-b bg-muted/30">
           <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16 ring-2 ring-primary/20">
-              <AvatarImage src={student.image} alt={student.name} />
-              <AvatarFallback className="bg-primary/10 text-primary font-semibold text-lg">
-                {getInitials(student.name)}
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={student.image || ""} />
+              <AvatarFallback>
+                {getInitials(student.fullName)}
               </AvatarFallback>
             </Avatar>
 
-            <div className="flex-1">
-              <DialogTitle className="text-xl">{student.name}</DialogTitle>
-              <p className="text-sm text-muted-foreground font-mono mt-1">
+            <div>
+              <DialogTitle>{student.fullName}</DialogTitle>
+              <p className="text-sm text-muted-foreground font-mono">
                 {student.studentId}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Last seen:{" "}
-                {student.lastSeen
-                  ? format(new Date(student.lastSeen), "MMMM d, yyyy")
-                  : "-"}
               </p>
             </div>
           </div>
         </DialogHeader>
 
         <div className="p-6 space-y-6">
-          {/* ================= Stats ================= */}
+          {/* STATS */}
           <div className="grid grid-cols-4 gap-3">
-            <StatBox label="Total Days" value={student.totalDays} />
+            <StatBox label="Total Days" value={stats.totalDays} />
             <StatBox
               label="Present"
-              value={student.presentDays}
+              value={stats.presentDays}
               className="bg-success/10 text-success"
             />
             <StatBox
               label="Late"
-              value={student.lateDays}
+              value={stats.lateDays}
               className="bg-warning/10 text-warning"
             />
             <StatBox
               label="Absent"
-              value={student.absentDays}
+              value={stats.absentDays}
               className="bg-destructive/10 text-destructive"
             />
           </div>
 
-          {/* ================= Attendance Rate ================= */}
+          {/* ATTENDANCE RATE */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Attendance Rate</span>
+            <div className="flex justify-between text-sm font-medium">
+              <span>Attendance Rate</span>
               <span
-                className={`text-lg font-bold ${getAttendanceRateColor(
-                  student.attendanceRate,
+                className={`font-bold ${getAttendanceRateColor(
+                  stats.attendanceRate
                 )}`}
               >
-                {student.attendanceRate}%
+                {stats.attendanceRate}%
               </span>
             </div>
-            <Progress value={student.attendanceRate} className="h-2" />
+            <Progress value={stats.attendanceRate} className="h-2" />
           </div>
 
-          {/* ================= History Table ================= */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold flex items-center gap-2">
+          {/* HISTORY */}
+          <div>
+            <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
               <Calendar className="h-4 w-4" />
               Attendance History
             </h4>
@@ -200,7 +250,7 @@ export function StudentDetailDialog({
             <ScrollArea className="h-[280px] rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30">
+                  <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Check-in</TableHead>
                     <TableHead>Check-out</TableHead>
@@ -211,17 +261,23 @@ export function StudentDetailDialog({
                 <TableBody>
                   {dailyRecords.map((record) => (
                     <TableRow key={record.date}>
-                      <TableCell className="font-medium">
-                        {format(new Date(record.date), "MMM d, yyyy")}
+                      <TableCell>
+                        {format(
+                          new Date(record.date),
+                          "MMM d, yyyy"
+                        )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+
+                      <TableCell>
                         {record.checkIn ?? "—"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+
+                      <TableCell>
                         {record.checkOut ?? "—"}
                       </TableCell>
+
                       <TableCell>
-                        <Badge variant={record.status}>
+                        <Badge variant={getStatusVariant(record.status)}>
                           {statusLabel(record.status)}
                         </Badge>
                       </TableCell>
@@ -232,7 +288,7 @@ export function StudentDetailDialog({
                     <TableRow>
                       <TableCell
                         colSpan={4}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center py-6 text-muted-foreground"
                       >
                         No attendance records found
                       </TableCell>
@@ -248,9 +304,10 @@ export function StudentDetailDialog({
   );
 }
 
-/* =======================
-   SMALL COMPONENT
-======================= */
+/* ==========================
+   SMALL STAT BOX
+========================== */
+
 function StatBox({
   label,
   value,

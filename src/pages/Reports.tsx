@@ -13,6 +13,7 @@ import {
   Legend,
 } from "recharts";
 import { Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,11 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { fetchAttendanceFromSheet } from "@/data/googleSheetAttendance";
+
+import { fetchAttendanceFromFirebase } from "@/data/firebaseAttendance";
 import { AttendanceRecord } from "@/types/attendance";
 
 /* =====================
-   FIX: helpers (logic only)
+   HELPERS
 ===================== */
 
 const normalizeDate = (date: string) =>
@@ -42,6 +44,7 @@ const normalizeStatus = (status?: string) => {
   const v = status?.trim().toLowerCase();
   if (v === "present") return "Present";
   if (v === "late") return "Late";
+  if (v === "out") return "Out";
   return "Absent";
 };
 
@@ -50,19 +53,30 @@ const Reports = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("7");
 
+  /* =====================
+     LOAD FROM FIREBASE
+  ===================== */
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      const sheetData = await fetchAttendanceFromSheet();
-      setData(sheetData);
+
+      const uid = "admin"; // TODO: replace with real auth uid
+      const role = "admin";
+
+      const firebaseData = await fetchAttendanceFromFirebase(uid, role);
+      setData(firebaseData);
+
       setIsLoading(false);
     };
+
     loadData();
   }, []);
 
   /* =====================
-     FIX: weeklyData logic
+     WEEKLY DATA
   ===================== */
+
   const weeklyData = useMemo(() => {
     const days = parseInt(timeRange);
 
@@ -72,31 +86,42 @@ const Reports = () => {
 
     return dateArray.map((date) => {
       const dayRecords = data.filter(
-        (r) => normalizeDate(r.date) === date
+        (r) => normalizeDate(r.createdAt) === date
       );
 
       const uniqueStudents = new Map<string, AttendanceRecord>();
 
       for (const record of dayRecords) {
         const existing = uniqueStudents.get(record.studentId);
+
         if (
           !existing ||
-          new Date(record.createdAt) > new Date(existing.createdAt)
+          new Date(record.createdAt) >
+          new Date(existing.createdAt)
         ) {
           uniqueStudents.set(record.studentId, record);
         }
       }
 
-      const records = Array.from(uniqueStudents.values()).map(
-        (r) => ({
+      const records = Array.from(uniqueStudents.values())
+        .map((r) => ({
           ...r,
           status: normalizeStatus(r.status),
-        })
-      );
+        }))
+        .filter((r) => r.status !== "Out"); // ❗ ไม่เอา checkout
 
-      const present = records.filter((r) => r.status === "Present").length;
-      const late = records.filter((r) => r.status === "Late").length;
-      const absent = records.filter((r) => r.status === "Absent").length;
+      const present = records.filter(
+        (r) => r.status === "Present"
+      ).length;
+
+      const late = records.filter(
+        (r) => r.status === "Late"
+      ).length;
+
+      const absent = records.filter(
+        (r) => r.status === "Absent"
+      ).length;
+
       const total = records.length;
 
       return {
@@ -114,8 +139,9 @@ const Reports = () => {
   }, [data, timeRange]);
 
   /* =====================
-     FIX: overallStats logic
+     OVERALL STATS
   ===================== */
+
   const overallStats = useMemo(() => {
     const validDays = weeklyData.filter((d) => d.total > 0);
 
@@ -132,30 +158,17 @@ const Reports = () => {
     const avgAttendanceRate =
       validDays.length > 0
         ? Math.round(
-            validDays.reduce((s, d) => s + d.attendanceRate, 0) /
-              validDays.length
-          )
-        : 0;
-
-    const recent = validDays.slice(-3);
-    const earlier = validDays.slice(0, 3);
-
-    const recentAvg =
-      recent.length > 0
-        ? recent.reduce((s, d) => s + d.attendanceRate, 0) /
-          recent.length
-        : 0;
-
-    const earlierAvg =
-      earlier.length > 0
-        ? earlier.reduce((s, d) => s + d.attendanceRate, 0) /
-          earlier.length
+          validDays.reduce(
+            (s, d) => s + d.attendanceRate,
+            0
+          ) / validDays.length
+        )
         : 0;
 
     return {
       ...sum,
       avgAttendanceRate,
-      trend: recentAvg - earlierAvg,
+      trend: 0,
     };
   }, [weeklyData]);
 
@@ -168,142 +181,133 @@ const Reports = () => {
   };
 
   /* =====================
-     UI (UNCHANGED)
+     UI
   ===================== */
+
+  if (isLoading) {
+    return <div className="p-6">Loading...</div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">
-            Analyze attendance trends and patterns
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Time range" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="14">Last 14 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Export PDF
-          </Button>
-        </div>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">
+          Attendance Reports
+        </h1>
+
+        <Select value={timeRange} onValueChange={setTimeRange}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="14">Last 14 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Average Attendance</CardDescription>
+          <CardHeader>
+            <CardDescription>
+              Average Attendance
+            </CardDescription>
             <div className="flex items-center gap-2">
-              <CardTitle className="text-3xl">{overallStats.avgAttendanceRate}%</CardTitle>
+              <CardTitle className="text-3xl">
+                {overallStats.avgAttendanceRate}%
+              </CardTitle>
               <TrendIcon />
             </div>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.trend > 0 ? "+" : ""}
-              {overallStats.trend.toFixed(1)}% vs previous period
-            </p>
-          </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardDescription>Total Present</CardDescription>
-            <CardTitle className="text-3xl text-success">{overallStats.present}</CardTitle>
+            <CardTitle className="text-3xl text-success">
+              {overallStats.present}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.present / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader>
             <CardDescription>Total Late</CardDescription>
-            <CardTitle className="text-3xl text-warning">{overallStats.late}</CardTitle>
+            <CardTitle className="text-3xl text-warning">
+              {overallStats.late}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.late / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
+
         <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Absent</CardDescription>
-            <CardTitle className="text-3xl text-destructive">{overallStats.absent}</CardTitle>
+          <CardDescription>Total Absent</CardDescription>
+          <CardHeader>
+            <CardTitle className="text-3xl text-destructive">
+              {overallStats.absent}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">
-              {overallStats.total > 0
-                ? Math.round((overallStats.absent / overallStats.total) * 100)
-                : 0}
-              % of all records
-            </p>
-          </CardContent>
         </Card>
       </div>
 
       {/* Charts */}
+      {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+        {/* ================= BAR CHART ================= */}
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Daily Breakdown</CardTitle>
-            <CardDescription>Attendance status by day</CardDescription>
+            <CardDescription>Present / Late / Absent</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+
+          <CardContent className="pt-2">
+            <div className="w-full h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <BarChart
+                  data={weeklyData}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
                   />
-                  <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
+
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                    axisLine={false}
                   />
-                  <Legend />
+
+                  <Tooltip />
+
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+
                   <Bar
                     dataKey="present"
                     name="Present"
-                    fill="hsl(142, 76%, 36%)"
-                    radius={[4, 4, 0, 0]}
+                    fill="#22c55e"
+                    radius={[6, 6, 0, 0]}
                   />
+
                   <Bar
                     dataKey="late"
                     name="Late"
-                    fill="hsl(38, 92%, 50%)"
-                    radius={[4, 4, 0, 0]}
+                    fill="#f59e0b"
+                    radius={[6, 6, 0, 0]}
                   />
+
                   <Bar
                     dataKey="absent"
                     name="Absent"
-                    fill="hsl(0, 84%, 60%)"
-                    radius={[4, 4, 0, 0]}
+                    fill="#ef4444"
+                    radius={[6, 6, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -311,44 +315,47 @@ const Reports = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* ================= LINE CHART ================= */}
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Attendance Rate Trend</CardTitle>
-            <CardDescription>Overall attendance percentage over time</CardDescription>
+            <CardDescription>เปอร์เซ็นต์การมาเรียน</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+
+          <CardContent className="pt-2">
+            <div className="w-full h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <LineChart
+                  data={weeklyData}
+                  margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+
                   <XAxis
                     dataKey="date"
                     tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
                   />
+
                   <YAxis
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${v}%`}
                     tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
                   />
+
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [`${value}%`, "Attendance Rate"]}
+                    formatter={(value: number) => [`${value}%`, "Rate"]}
                   />
+
                   <Line
                     type="monotone"
                     dataKey="attendanceRate"
-                    name="Attendance Rate"
-                    stroke="hsl(221, 83%, 53%)"
+                    stroke="#3b82f6"
                     strokeWidth={3}
-                    dot={{ fill: "hsl(221, 83%, 53%)", strokeWidth: 2 }}
+                    dot={{ r: 4 }}
                     activeDot={{ r: 6 }}
                   />
                 </LineChart>
