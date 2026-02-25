@@ -22,7 +22,6 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Redirect if already logged in
   if (isAuthenticated) {
     navigate("/");
     return null;

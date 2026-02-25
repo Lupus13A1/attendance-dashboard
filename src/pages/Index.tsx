@@ -178,9 +178,7 @@ const Index = () => {
           onStatusChange={setFilterStatus}
         />
 
-        <div className="overflow-x-auto rounded-lg border">
           <AttendanceTable data={filteredRecords} />
-        </div>
       </div>
     </div>
   );

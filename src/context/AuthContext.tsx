@@ -13,9 +13,6 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-/* =========================
-   TYPES
-========================= */
 
 export type UserRole = "admin" | "teacher" | "student";
 
@@ -38,9 +35,6 @@ interface AuthContextType {
   loading: boolean;
 }
 
-/* =========================
-   CONTEXT
-========================= */
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -48,9 +42,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /* =========================
-     1. Listen Auth State
-  ========================== */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
@@ -74,9 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  /* =========================
-     2. Login
-  ========================== */
   const login = async (email: string, password: string) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -86,9 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /* =========================
-     3. Logout
-  ========================== */
   const logout = async () => {
     await signOut(auth);
     setUser(null);

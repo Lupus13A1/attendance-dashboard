@@ -50,7 +50,6 @@ type SortKey =
 
 type SortDirection = "asc" | "desc";
 
-/* 🔥 รองรับ out ด้วย */
 const getStatusVariant = (
   status: AttendanceRecord["status"],
 ): "present" | "late" | "absent" => {
@@ -69,14 +68,10 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
   const [selectedImage, setSelectedImage] =
     useState<{ src: string; name: string } | null>(null);
 
-  /* 🔥 RESET PAGE เมื่อ data เปลี่ยน */
   useEffect(() => {
     setCurrentPage(1);
   }, [data]);
 
-  /* ===============================
-     SORT (ไม่ filter type แล้ว)
-  =============================== */
   const sortedData = useMemo(() => {
     return [...data].sort((a, b) => {
       const aVal = a[sortKey];

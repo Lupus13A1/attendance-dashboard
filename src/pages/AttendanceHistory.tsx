@@ -33,8 +33,8 @@ const AttendanceHistory = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [studentIdSearch, setStudentIdSearch] = useState("");
   const [selectedStatus, setSelectedStatus] =
-    useState<string>("all"); // 🔥 รองรับ out ด้วย
-
+    useState<string>("all"); 
+    
   /* =========================
      LOAD DATA FROM FIREBASE
   ========================== */

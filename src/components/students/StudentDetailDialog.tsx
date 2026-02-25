@@ -35,9 +35,6 @@ interface StudentDetailDialogProps {
   records: AttendanceRecord[];
 }
 
-/* ==========================
-   HELPERS
-========================== */
 
 const statusLabel = (status: AttendanceStatus) => {
   if (status === "present") return "Present";
@@ -76,9 +73,7 @@ const getInitials = (name?: string) => {
     .slice(0, 2);
 };
 
-/* ==========================
-   COMPONENT
-========================== */
+
 
 export function StudentDetailDialog({
   open,
@@ -86,10 +81,7 @@ export function StudentDetailDialog({
   student,
   records,
 }: StudentDetailDialogProps) {
-  /* ==========================
-     BUILD DAILY RECORDS
-     (ignore check-out for status)
-  =========================== */
+
   const dailyRecords = useMemo(() => {
     if (!student) return [];
 
@@ -123,7 +115,6 @@ export function StudentDetailDialog({
 
       const dayData = map.get(dayKey)!;
 
-      // ✅ ใช้ check-in เป็นตัวกำหนด status เท่านั้น
       if (log.type === "check-in") {
         dayData.checkIn = time;
         if (log.status !== "out") {
@@ -131,7 +122,6 @@ export function StudentDetailDialog({
         }
       }
 
-      // ✅ check-out แค่เก็บเวลา ไม่กระทบ status
       if (log.type === "check-out") {
         dayData.checkOut = time;
       }
@@ -143,10 +133,6 @@ export function StudentDetailDialog({
     );
   }, [student, records]);
 
-  /* ==========================
-     CALCULATE STATS
-     (ignore status "out")
-  =========================== */
   const stats = useMemo(() => {
     const validDays = dailyRecords.filter(
       (d) => d.status !== "out"
@@ -165,7 +151,7 @@ export function StudentDetailDialog({
     const absentDays = validDays.filter(
       (d) => d.status === "absent"
     ).length;
-``
+    ``
     const attendanceRate =
       totalDays > 0
         ? Math.round(((presentDays + lateDays) / totalDays) * 100)
@@ -304,9 +290,6 @@ export function StudentDetailDialog({
   );
 }
 
-/* ==========================
-   SMALL STAT BOX
-========================== */
 
 function StatBox({
   label,

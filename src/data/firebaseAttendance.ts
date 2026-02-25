@@ -70,7 +70,6 @@ export async function fetchAttendanceFromFirebase(
 
         uid: data.uid ?? "",
 
-        // ✅ ดึงจาก users
         studentId: user?.id ?? "",
 
         rfid: user?.rfid ?? "",
