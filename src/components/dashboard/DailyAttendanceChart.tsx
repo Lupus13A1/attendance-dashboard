@@ -1,5 +1,7 @@
+"use client";
+
 import { useMemo } from "react";
-import { AttendanceRecord } from "@/types/attendance";
+import { AttendanceLog, AttendanceStatus } from "@/types/attendance";
 import {
   AreaChart,
   Area,
@@ -12,58 +14,55 @@ import {
 } from "recharts";
 import { format, subDays } from "date-fns";
 
+/* ======================
+   PROPS
+====================== */
 interface DailyAttendanceChartProps {
-  data: AttendanceRecord[];
+  data: AttendanceLog[];
 }
 
 /* ======================
-   Helpers
+   HELPERS
 ====================== */
-
-type NormalizedStatus = "present" | "late" | "absent";
-
-const normalizeStatus = (status?: string): NormalizedStatus => {
-  const value = status?.trim().toLowerCase();
-  if (value === "present") return "present";
-  if (value === "late") return "late";
+const normalizeStatus = (status?: AttendanceStatus): AttendanceStatus => {
+  if (status === "present") return "present";
+  if (status === "late") return "late";
   return "absent";
 };
 
-const normalizeDate = (date: string) =>
-  format(new Date(date), "yyyy-MM-dd");
+const normalizeDate = (timestamp: string) =>
+  format(new Date(timestamp), "yyyy-MM-dd");
 
 /* ======================
-   Component
+   COMPONENT
 ====================== */
-
-export function DailyAttendanceChart({
-  data,
-}: DailyAttendanceChartProps) {
+export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
   const chartData = useMemo(() => {
+    /* last 14 days (yyyy-MM-dd) */
     const last14Days = Array.from({ length: 14 }, (_, i) =>
-      format(subDays(new Date(), 13 - i), "yyyy-MM-dd")
+      format(subDays(new Date(), 13 - i), "yyyy-MM-dd"),
     );
 
     return last14Days.map((day) => {
-      const dayRecords = data.filter(
-        (r) => normalizeDate(r.date) === day
-      );
+      /* records of that day */
+      const dayRecords = data.filter((r) => normalizeDate(r.timestamp) === day);
 
-      /* keep latest record per student */
-      const latestPerStudent = new Map<string, AttendanceRecord>();
+      /* keep latest record per student (by timestamp) */
+      const latestPerStudent = new Map<string, AttendanceLog>();
 
       for (const record of dayRecords) {
         const existing = latestPerStudent.get(record.studentId);
+
         if (
           !existing ||
-          new Date(record.createdAt).getTime() >
-            new Date(existing.createdAt).getTime()
+          new Date(record.timestamp).getTime() >
+            new Date(existing.timestamp).getTime()
         ) {
           latestPerStudent.set(record.studentId, record);
         }
       }
 
-      const counts = {
+      const counts: Record<AttendanceStatus, number> = {
         present: 0,
         late: 0,
         absent: 0,
@@ -86,25 +85,15 @@ export function DailyAttendanceChart({
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold">
-          Attendance Trend
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Last 14 days overview
-        </p>
+        <h3 className="text-lg font-semibold">Attendance Trend</h3>
+        <p className="text-sm text-muted-foreground">Last 14 days overview</p>
       </div>
 
       <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData}>
             <defs>
-              <linearGradient
-                id="colorPresent"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
+              <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="5%"
                   stopColor="hsl(142, 76%, 36%)"
@@ -117,13 +106,7 @@ export function DailyAttendanceChart({
                 />
               </linearGradient>
 
-              <linearGradient
-                id="colorLate"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
+              <linearGradient id="colorLate" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="5%"
                   stopColor="hsl(38, 92%, 50%)"
@@ -136,13 +119,7 @@ export function DailyAttendanceChart({
                 />
               </linearGradient>
 
-              <linearGradient
-                id="colorAbsent"
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
+              <linearGradient id="colorAbsent" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="5%"
                   stopColor="hsl(0, 84%, 60%)"
@@ -156,10 +133,7 @@ export function DailyAttendanceChart({
               </linearGradient>
             </defs>
 
-            <CartesianGrid
-              strokeDasharray="3 3"
-              className="stroke-border"
-            />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
 
             <XAxis
               dataKey="date"
@@ -174,6 +148,7 @@ export function DailyAttendanceChart({
               tickLine={false}
               axisLine={false}
               className="text-muted-foreground"
+              allowDecimals={false}
             />
 
             <Tooltip
