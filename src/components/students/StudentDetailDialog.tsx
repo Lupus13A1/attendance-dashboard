@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo } from "react";
 import { format } from "date-fns";
 import { Calendar } from "lucide-react";
@@ -9,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -19,7 +20,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AttendanceRecord, StudentSummary } from "@/types/attendance";
+import { Progress } from "@/components/ui/progress";
+
+import {
+  StudentSummary,
+  AttendanceRecord,
+  AttendanceStatus,
+} from "@/types/attendance";
 
 interface StudentDetailDialogProps {
   open: boolean;
@@ -28,23 +35,26 @@ interface StudentDetailDialogProps {
   records: AttendanceRecord[];
 }
 
-/* =======================
-   Helpers
-======================= */
 
-type NormalizedStatus = "present" | "late" | "absent";
-
-const normalizeStatus = (status?: string): NormalizedStatus => {
-  const value = status?.trim().toLowerCase();
-  if (value === "present") return "present";
-  if (value === "late") return "late";
-  return "absent";
-};
-
-const statusLabel = (status: NormalizedStatus) => {
+const statusLabel = (status: AttendanceStatus) => {
   if (status === "present") return "Present";
   if (status === "late") return "Late";
   return "Absent";
+};
+
+const getStatusVariant = (
+  status: AttendanceStatus
+):
+  | "present"
+  | "late"
+  | "absent"
+  | "default"
+  | "secondary"
+  | "destructive"
+  | "outline" => {
+  if (status === "present") return "present";
+  if (status === "late") return "late";
+  return "absent";
 };
 
 const getAttendanceRateColor = (rate: number) => {
@@ -53,122 +63,172 @@ const getAttendanceRateColor = (rate: number) => {
   return "text-destructive";
 };
 
+const getInitials = (name?: string) => {
+  if (!name) return "NA";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+
+
 export function StudentDetailDialog({
   open,
   onOpenChange,
   student,
   records,
 }: StudentDetailDialogProps) {
-  const studentRecords = useMemo(() => {
+
+  const dailyRecords = useMemo(() => {
     if (!student) return [];
-    return records
-      .filter((r) => r.studentId === student.studentId)
-      .sort(
-        (a, b) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+
+    const logs = records.filter(
+      (r) => r.studentId === student.studentId
+    );
+
+    const map = new Map<
+      string,
+      {
+        date: string;
+        checkIn?: string;
+        checkOut?: string;
+        status: AttendanceStatus;
+      }
+    >();
+
+    for (const log of logs) {
+      const dateObj = new Date(log.timestamp);
+      if (isNaN(dateObj.getTime())) continue;
+
+      const dayKey = format(dateObj, "yyyy-MM-dd");
+      const time = format(dateObj, "HH:mm");
+
+      if (!map.has(dayKey)) {
+        map.set(dayKey, {
+          date: dayKey,
+          status: "absent",
+        });
+      }
+
+      const dayData = map.get(dayKey)!;
+
+      if (log.type === "check-in") {
+        dayData.checkIn = time;
+        if (log.status !== "out") {
+          dayData.status = log.status ?? "absent";
+        }
+      }
+
+      if (log.type === "check-out") {
+        dayData.checkOut = time;
+      }
+    }
+
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   }, [student, records]);
 
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  const stats = useMemo(() => {
+    const validDays = dailyRecords.filter(
+      (d) => d.status !== "out"
+    );
+
+    const totalDays = validDays.length;
+
+    const presentDays = validDays.filter(
+      (d) => d.status === "present"
+    ).length;
+
+    const lateDays = validDays.filter(
+      (d) => d.status === "late"
+    ).length;
+
+    const absentDays = validDays.filter(
+      (d) => d.status === "absent"
+    ).length;
+    ``
+    const attendanceRate =
+      totalDays > 0
+        ? Math.round(((presentDays + lateDays) / totalDays) * 100)
+        : 0;
+
+    return {
+      totalDays,
+      presentDays,
+      lateDays,
+      absentDays,
+      attendanceRate,
+    };
+  }, [dailyRecords]);
 
   if (!student) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] p-0 overflow-hidden">
-        {/* ================= Header ================= */}
+        {/* HEADER */}
         <DialogHeader className="p-6 pb-4 border-b bg-muted/30">
           <div className="flex items-start gap-4">
-            <Avatar className="h-16 w-16 ring-2 ring-primary/20">
-              <AvatarImage src={student.image} alt={student.fullName} />
-              <AvatarFallback className="bg-primary/10 text-primary font-semibold text-lg">
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={student.image || ""} />
+              <AvatarFallback>
                 {getInitials(student.fullName)}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <DialogTitle className="text-xl">
-                {student.fullName}
-              </DialogTitle>
-              <p className="text-sm text-muted-foreground font-mono mt-1">
+
+            <div>
+              <DialogTitle>{student.fullName}</DialogTitle>
+              <p className="text-sm text-muted-foreground font-mono">
                 {student.studentId}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Last seen:{" "}
-                {format(new Date(student.lastSeen), "MMMM d, yyyy")}
               </p>
             </div>
           </div>
         </DialogHeader>
 
         <div className="p-6 space-y-6">
-          {/* ================= Stats ================= */}
+          {/* STATS */}
           <div className="grid grid-cols-4 gap-3">
-            <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <p className="text-2xl font-bold">
-                {student.totalDays}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Total Days
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-success/10 p-3 text-center">
-              <p className="text-2xl font-bold text-success">
-                {student.presentDays}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Present
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-warning/10 p-3 text-center">
-              <p className="text-2xl font-bold text-warning">
-                {student.lateDays}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Late
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-destructive/10 p-3 text-center">
-              <p className="text-2xl font-bold text-destructive">
-                {student.absentDays}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Absent
-              </p>
-            </div>
-          </div>
-
-          {/* ================= Attendance Rate ================= */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
-                Attendance Rate
-              </span>
-              <span
-                className={`text-lg font-bold ${getAttendanceRateColor(
-                  student.attendanceRate
-                )}`}
-              >
-                {student.attendanceRate}%
-              </span>
-            </div>
-            <Progress
-              value={student.attendanceRate}
-              className="h-2"
+            <StatBox label="Total Days" value={stats.totalDays} />
+            <StatBox
+              label="Present"
+              value={stats.presentDays}
+              className="bg-success/10 text-success"
+            />
+            <StatBox
+              label="Late"
+              value={stats.lateDays}
+              className="bg-warning/10 text-warning"
+            />
+            <StatBox
+              label="Absent"
+              value={stats.absentDays}
+              className="bg-destructive/10 text-destructive"
             />
           </div>
 
-          {/* ================= History Table ================= */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-semibold flex items-center gap-2">
+          {/* ATTENDANCE RATE */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm font-medium">
+              <span>Attendance Rate</span>
+              <span
+                className={`font-bold ${getAttendanceRateColor(
+                  stats.attendanceRate
+                )}`}
+              >
+                {stats.attendanceRate}%
+              </span>
+            </div>
+            <Progress value={stats.attendanceRate} className="h-2" />
+          </div>
+
+          {/* HISTORY */}
+          <div>
+            <h4 className="text-sm font-semibold flex items-center gap-2 mb-3">
               <Calendar className="h-4 w-4" />
               Attendance History
             </h4>
@@ -176,7 +236,7 @@ export function StudentDetailDialog({
             <ScrollArea className="h-[280px] rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30">
+                  <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Check-in</TableHead>
                     <TableHead>Check-out</TableHead>
@@ -185,48 +245,36 @@ export function StudentDetailDialog({
                 </TableHeader>
 
                 <TableBody>
-                  {studentRecords.map((record) => {
-                    const status = normalizeStatus(record.status);
+                  {dailyRecords.map((record) => (
+                    <TableRow key={record.date}>
+                      <TableCell>
+                        {format(
+                          new Date(record.date),
+                          "MMM d, yyyy"
+                        )}
+                      </TableCell>
 
-                    return (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">
-                          {format(
-                            new Date(record.date),
-                            "MMM d, yyyy"
-                          )}
-                        </TableCell>
+                      <TableCell>
+                        {record.checkIn ?? "—"}
+                      </TableCell>
 
-                        <TableCell className="text-muted-foreground">
-                          {record.checkInTime ?? "—"}
-                        </TableCell>
+                      <TableCell>
+                        {record.checkOut ?? "—"}
+                      </TableCell>
 
-                        <TableCell className="text-muted-foreground">
-                          {record.checkOutTime ?? "—"}
-                        </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(record.status)}>
+                          {statusLabel(record.status)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
 
-                        <TableCell>
-                          <Badge
-                            variant={
-                              status === "present"
-                                ? "present"
-                                : status === "late"
-                                ? "late"
-                                : "absent"
-                            }
-                          >
-                            {statusLabel(status)}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-
-                  {studentRecords.length === 0 && (
+                  {dailyRecords.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={4}
-                        className="text-center text-muted-foreground py-8"
+                        className="text-center py-6 text-muted-foreground"
                       >
                         No attendance records found
                       </TableCell>
@@ -239,5 +287,23 @@ export function StudentDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+function StatBox({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: number;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-lg p-3 text-center ${className}`}>
+      <p className="text-2xl font-bold">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
   );
 }

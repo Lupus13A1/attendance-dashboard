@@ -1,5 +1,7 @@
+"use client";
+
 import { useMemo } from "react";
-import { AttendanceRecord } from "@/types/attendance";
+import { AttendanceLog, AttendanceStatus } from "@/types/attendance";
 import {
   PieChart,
   Pie,
@@ -10,98 +12,95 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 
+/* ======================
+   PROPS
+====================== */
 interface StatusDistributionChartProps {
-  data: AttendanceRecord[];
+  data: AttendanceLog[];
 }
 
 /* ======================
-   Helpers
+   HELPERS
 ====================== */
 
-type NormalizedStatus = "present" | "late" | "absent";
-
-const normalizeStatus = (status?: string): NormalizedStatus => {
-  const value = status?.trim().toLowerCase();
-  if (value === "present") return "present";
-  if (value === "late") return "late";
+const normalizeStatus = (status?: AttendanceStatus): AttendanceStatus => {
+  if (status === "present") return "present";
+  if (status === "late") return "late";
   return "absent";
 };
 
-const normalizeDate = (date: string) =>
-  format(new Date(date), "yyyy-MM-dd");
+const normalizeDate = (timestamp: string) =>
+  format(new Date(timestamp), "yyyy-MM-dd");
 
-const STATUS_LABEL: Record<NormalizedStatus, string> = {
+const STATUS_LABEL: Record<AttendanceStatus, string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
 };
 
-const COLORS: Record<NormalizedStatus, string> = {
+const COLORS: Record<AttendanceStatus, string> = {
   present: "hsl(142, 76%, 36%)",
   late: "hsl(38, 92%, 50%)",
   absent: "hsl(0, 84%, 60%)",
 };
 
+/* ======================
+   COMPONENT
+====================== */
 export function StatusDistributionChart({
   data,
 }: StatusDistributionChartProps) {
   const chartData = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
 
-    /* ---------- filter today (SAFE) ---------- */
+    /* ---------- filter today ---------- */
     const todayRecords = data.filter(
-      (r) => normalizeDate(r.date) === today
+      (r) => normalizeDate(r.timestamp) === today,
     );
 
     /* ---------- keep latest record per student ---------- */
-    const latestPerStudent = new Map<string, AttendanceRecord>();
+    const latestPerStudent = new Map<string, AttendanceLog>();
 
     for (const record of todayRecords) {
       const existing = latestPerStudent.get(record.studentId);
+
       if (
         !existing ||
-        new Date(record.createdAt).getTime() >
-          new Date(existing.createdAt).getTime()
+        new Date(record.timestamp).getTime() >
+          new Date(existing.timestamp).getTime()
       ) {
         latestPerStudent.set(record.studentId, record);
       }
     }
 
-    const records = Array.from(latestPerStudent.values());
-
-    /* ---------- count by normalized status ---------- */
-    const counts: Record<NormalizedStatus, number> = {
+    /* ---------- count by status ---------- */
+    const counts: Record<AttendanceStatus, number> = {
       present: 0,
       late: 0,
       absent: 0,
     };
 
-    for (const record of records) {
+    for (const record of latestPerStudent.values()) {
       const status = normalizeStatus(record.status);
       counts[status]++;
     }
 
     /* ---------- build chart data ---------- */
-    return (Object.keys(counts) as NormalizedStatus[])
-      .map((key) => ({
-        name: STATUS_LABEL[key],
-        status: key,
-        value: counts[key],
+    return (Object.keys(counts) as AttendanceStatus[])
+      .map((status) => ({
+        name: STATUS_LABEL[status],
+        status,
+        value: counts[status],
       }))
       .filter((item) => item.value > 0);
   }, [data]);
 
-  const total = chartData.reduce(
-    (sum, item) => sum + item.value,
-    0
-  );
+  const total = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold">
-          Today's Distribution
-        </h3>
+        <h3 className="text-lg font-semibold">Today's Distribution</h3>
         <p className="text-sm text-muted-foreground">
           Status breakdown for today
         </p>
@@ -127,7 +126,7 @@ export function StatusDistributionChart({
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={COLORS[entry.status as NormalizedStatus]}
+                    fill={COLORS[entry.status]}
                     strokeWidth={0}
                   />
                 ))}
@@ -145,9 +144,7 @@ export function StatusDistributionChart({
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <p className="text-muted-foreground">
-              No data for today
-            </p>
+            <p className="text-muted-foreground">No data for today</p>
           </div>
         )}
       </div>
