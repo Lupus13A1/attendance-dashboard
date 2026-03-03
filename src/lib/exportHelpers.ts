@@ -43,7 +43,6 @@ export function buildAttendanceMatrix(
     }
 
     const student = dailyMap.get(r.studentId)!;
-
     student.dailyStatus[date] = r.status;
   }
 
@@ -63,7 +62,7 @@ export function buildAttendanceMatrix(
   ];
 
   const rows = Array.from(dailyMap.values()).map((s) => {
-    let presentCount = 0;
+    let presentDayCount = 0;
     let lateCount = 0;
     let absentCount = 0;
 
@@ -80,9 +79,10 @@ export function buildAttendanceMatrix(
 
       if (status === "present") {
         row.push(1);
-        presentCount++;
+        presentDayCount++;
       } else if (status === "late") {
-        row.push(1);
+        row.push(0.5);
+        presentDayCount++;
         lateCount++;
       } else if (status === "absent") {
         row.push(0);
@@ -92,7 +92,7 @@ export function buildAttendanceMatrix(
       }
     }
 
-    row.push(presentCount);
+    row.push(presentDayCount);
     row.push(lateCount);
     row.push(absentCount);
 
@@ -116,7 +116,6 @@ export function exportCSV(header: string[], rows: any[]) {
   saveAs(blob, "attendance.csv");
 }
 
-
 export function exportExcel(header: string[], rows: any[]) {
   const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
   const wb = XLSX.utils.book_new();
@@ -128,7 +127,6 @@ export function exportExcel(header: string[], rows: any[]) {
 export async function exportPDF(header: string[], rows: any[]) {
   const doc = new jsPDF("l", "pt");
 
-  // โหลดฟอนต์จาก public
   const response = await fetch("/fonts/THSarabun.ttf");
   const buffer = await response.arrayBuffer();
 
@@ -146,19 +144,16 @@ export async function exportPDF(header: string[], rows: any[]) {
   autoTable(doc, {
     head: [header],
     body: rows,
-
     styles: {
       font: "THSarabun",
       fontSize: 16,
       halign: "center",
     },
-
     headStyles: {
       font: "THSarabun",
       fontStyle: "normal",
       fontSize: 18,
     },
-
     bodyStyles: {
       font: "THSarabun",
       fontSize: 16,
