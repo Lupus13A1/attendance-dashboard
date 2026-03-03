@@ -128,7 +128,7 @@ const handleAutoAbsent = async () => {
         checkedInToday.add(data.uid);
       }
 
-      if (data.type === "auto-absent") {
+      if (data.type === "absent") {
         alreadyAbsentToday.add(data.uid);
       }
     }
@@ -136,9 +136,6 @@ const handleAutoAbsent = async () => {
     console.log("Checked-in today:", checkedInToday.size);
     console.log("Already absent today:", alreadyAbsentToday.size);
 
-    // =========================
-    // 2️⃣ Loop ทุก user
-    // =========================
     for (const userDoc of usersSnapshot.docs) {
       const user = userDoc.data();
 
@@ -159,7 +156,7 @@ const handleAutoAbsent = async () => {
         uid,
         name: user.name ?? "",
         status: "absent",
-        type: "auto-absent",
+        type: "absent",
         timestamp: now,
         createdAt: now,
       });

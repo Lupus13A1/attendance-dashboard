@@ -12,53 +12,56 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 
-/* ======================
-   PROPS
-====================== */
+
 interface StatusDistributionChartProps {
   data: AttendanceLog[];
 }
 
-/* ======================
-   HELPERS
-====================== */
-
-const normalizeStatus = (status?: AttendanceStatus): AttendanceStatus => {
+const normalizeStatus = (
+  status?: AttendanceStatus
+): AttendanceStatus | null => {
   if (status === "present") return "present";
   if (status === "late") return "late";
-  return "absent";
+  if (status === "absent") return "absent";
+
+  return null;
 };
 
 const normalizeDate = (timestamp: string) =>
   format(new Date(timestamp), "yyyy-MM-dd");
 
-const STATUS_LABEL: Record<AttendanceStatus, string> = {
+const STATUS_LABEL: Record<
+  Exclude<AttendanceStatus, "out">,
+  string
+> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
 };
 
-const COLORS: Record<AttendanceStatus, string> = {
+const COLORS: Record<
+  Exclude<AttendanceStatus, "out">,
+  string
+> = {
   present: "hsl(142, 76%, 36%)",
   late: "hsl(38, 92%, 50%)",
   absent: "hsl(0, 84%, 60%)",
 };
 
-/* ======================
-   COMPONENT
-====================== */
 export function StatusDistributionChart({
   data,
 }: StatusDistributionChartProps) {
   const chartData = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
 
-    /* ---------- filter today ---------- */
-    const todayRecords = data.filter(
-      (r) => normalizeDate(r.timestamp) === today,
-    );
+    const todayRecords = data.filter((r) => {
+      const isToday = normalizeDate(r.timestamp) === today;
+      const isOutCheckout =
+        r.status === "out" && r.type === "check-out";
 
-    /* ---------- keep latest record per student ---------- */
+      return isToday && !isOutCheckout;
+    });
+
     const latestPerStudent = new Map<string, AttendanceLog>();
 
     for (const record of todayRecords) {
@@ -67,14 +70,16 @@ export function StatusDistributionChart({
       if (
         !existing ||
         new Date(record.timestamp).getTime() >
-          new Date(existing.timestamp).getTime()
+        new Date(existing.timestamp).getTime()
       ) {
         latestPerStudent.set(record.studentId, record);
       }
     }
 
-    /* ---------- count by status ---------- */
-    const counts: Record<AttendanceStatus, number> = {
+    const counts: Record<
+      Exclude<AttendanceStatus, "out">,
+      number
+    > = {
       present: 0,
       late: 0,
       absent: 0,
@@ -82,11 +87,15 @@ export function StatusDistributionChart({
 
     for (const record of latestPerStudent.values()) {
       const status = normalizeStatus(record.status);
+
+      if (!status) continue;
+
       counts[status]++;
     }
 
-    /* ---------- build chart data ---------- */
-    return (Object.keys(counts) as AttendanceStatus[])
+    return (Object.keys(counts) as Array<
+      Exclude<AttendanceStatus, "out">
+    >)
       .map((status) => ({
         name: STATUS_LABEL[status],
         status,
@@ -144,7 +153,9 @@ export function StatusDistributionChart({
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <p className="text-muted-foreground">No data for today</p>
+            <p className="text-muted-foreground">
+              No data for today
+            </p>
           </div>
         )}
       </div>

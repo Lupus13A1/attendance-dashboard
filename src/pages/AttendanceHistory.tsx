@@ -33,10 +33,10 @@ const AttendanceHistory = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [studentIdSearch, setStudentIdSearch] = useState("");
   const [selectedStatus, setSelectedStatus] =
-    useState<string>("all"); 
-    
+    useState<string>("all");
+
   /* =========================
-     LOAD DATA FROM FIREBASE
+     LOAD DATA
   ========================== */
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -58,9 +58,7 @@ const AttendanceHistory = () => {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
+    if (user) loadData();
   }, [user, loadData]);
 
   /* =========================
@@ -95,7 +93,6 @@ const AttendanceHistory = () => {
         return false;
       }
 
-      // 🔥 status filter รองรับ out
       if (
         selectedStatus !== "all" &&
         record.status !== selectedStatus
@@ -108,8 +105,8 @@ const AttendanceHistory = () => {
   }, [data, dateRange, selectedDate, studentIdSearch, selectedStatus]);
 
   /* =========================
-     CHECK-IN ONLY FOR STATS
-     (ไม่เอา check-out และ out มาคำนวณ)
+     STATS → นับเฉพาะ check-in
+     และไม่เอา out
   ========================== */
   const checkInOnly = useMemo(() => {
     return filteredData.filter(
