@@ -23,18 +23,15 @@ const Index = () => {
   const [filterStatus, setFilterStatus] =
     useState<"present" | "late" | "absent" | "all">("all");
 
-  // ======================
-  // Load Firebase
-  // ======================
-
+  /* ======================
+     LOAD DATA
+  ====================== */
   const loadAttendance = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
-
     const data = await fetchAttendanceFromFirebase(user.uid, user.role);
     setRecords(data);
-
     setLoading(false);
   }, [user]);
 
@@ -42,10 +39,10 @@ const Index = () => {
     loadAttendance();
   }, [loadAttendance]);
 
-  // ======================
-  // Filter
-  // ======================
-
+  /* ======================
+     FILTER FOR TABLE
+     (แสดงทุก type รวม out)
+  ====================== */
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
       if (
@@ -70,16 +67,24 @@ const Index = () => {
     });
   }, [records, selectedDate, searchStudentId, filterStatus]);
 
-  // ======================
-  // Today Stats
-  // ======================
+  /* ======================
+     BASE FOR STATS / CHARTS
+     (ตัด out + check-out ออก)
+  ====================== */
+  const statsBaseRecords = useMemo(() => {
+    return records.filter(
+      (r) => !(r.status === "out" && r.type === "check-out")
+    );
+  }, [records]);
 
+  /* ======================
+     TODAY STATS
+  ====================== */
   const todayStats = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
 
-    const todayRecords = records.filter(
-      (r) =>
-        format(new Date(r.date), "yyyy-MM-dd") === today
+    const todayRecords = statsBaseRecords.filter(
+      (r) => format(new Date(r.date), "yyyy-MM-dd") === today
     );
 
     const latestPerStudent = new Map<string, AttendanceRecord>();
@@ -104,16 +109,20 @@ const Index = () => {
       late: latest.filter((r) => r.status === "late").length,
       absent: latest.filter((r) => r.status === "absent").length,
     };
-  }, [records]);
+  }, [statsBaseRecords]);
 
+  /* ======================
+     TOTAL STUDENTS
+     (ไม่นับ out+checkout)
+  ====================== */
   const totalStudents = useMemo(
-    () => new Set(records.map((r) => r.studentId)).size,
-    [records]
+    () => new Set(statsBaseRecords.map((r) => r.studentId)).size,
+    [statsBaseRecords]
   );
 
-  // ======================
-  // Render
-  // ======================
+  /* ======================
+     RENDER
+  ====================== */
 
   return (
     <div className="space-y-6 px-4 animate-fade-in">
@@ -130,11 +139,13 @@ const Index = () => {
         <StatCard
           title="Present Today"
           value={todayStats.present}
-          subtitle={`${todayStats.total > 0
-            ? Math.round(
-                (todayStats.present / todayStats.total) * 100
-              )
-            : 0}% attendance`}
+          subtitle={`${
+            todayStats.total > 0
+              ? Math.round(
+                  (todayStats.present / todayStats.total) * 100
+                )
+              : 0
+          }% attendance`}
           icon={UserCheck}
           variant="present"
         />
@@ -156,18 +167,18 @@ const Index = () => {
         />
       </div>
 
-      {/* Charts */}
+      {/* Charts (ไม่เอา out) */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 overflow-x-auto">
-          <DailyAttendanceChart data={records} />
+          <DailyAttendanceChart data={statsBaseRecords} />
         </div>
 
         <div className="overflow-x-auto">
-          <StatusDistributionChart data={records} />
+          <StatusDistributionChart data={statsBaseRecords} />
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table (แสดงทุกอย่างรวม out) */}
       <div className="space-y-4">
         <AttendanceFilters
           selectedDate={selectedDate}
@@ -178,7 +189,7 @@ const Index = () => {
           onStatusChange={setFilterStatus}
         />
 
-          <AttendanceTable data={filteredRecords} />
+        <AttendanceTable data={filteredRecords} />
       </div>
     </div>
   );

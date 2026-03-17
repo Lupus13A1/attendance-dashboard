@@ -38,16 +38,21 @@ const normalizeDate = (timestamp: string) =>
 ====================== */
 export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
   const chartData = useMemo(() => {
-    /* last 14 days (yyyy-MM-dd) */
     const last14Days = Array.from({ length: 14 }, (_, i) =>
       format(subDays(new Date(), 13 - i), "yyyy-MM-dd"),
     );
 
     return last14Days.map((day) => {
-      /* records of that day */
-      const dayRecords = data.filter((r) => normalizeDate(r.timestamp) === day);
+      /* ✅ filter day + ignore check-out out */
+      const dayRecords = data.filter((r) => {
+        const isSameDay = normalizeDate(r.timestamp) === day;
+        const shouldIgnore =
+          r.status === "out" && r.type === "check-out";
 
-      /* keep latest record per student (by timestamp) */
+        return isSameDay && !shouldIgnore;
+      });
+
+      /* keep latest record per student */
       const latestPerStudent = new Map<string, AttendanceLog>();
 
       for (const record of dayRecords) {
@@ -86,7 +91,9 @@ export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Attendance Trend</h3>
-        <p className="text-sm text-muted-foreground">Last 14 days overview</p>
+        <p className="text-sm text-muted-foreground">
+          Last 14 days overview
+        </p>
       </div>
 
       <div className="h-[300px]">
@@ -94,42 +101,18 @@ export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
           <AreaChart data={chartData}>
             <defs>
               <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="hsl(142, 76%, 36%)"
-                  stopOpacity={0.3}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="hsl(142, 76%, 36%)"
-                  stopOpacity={0}
-                />
+                <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0}/>
               </linearGradient>
 
               <linearGradient id="colorLate" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="hsl(38, 92%, 50%)"
-                  stopOpacity={0.3}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="hsl(38, 92%, 50%)"
-                  stopOpacity={0}
-                />
+                <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0}/>
               </linearGradient>
 
               <linearGradient id="colorAbsent" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="hsl(0, 84%, 60%)"
-                  stopOpacity={0.3}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="hsl(0, 84%, 60%)"
-                  stopOpacity={0}
-                />
+                <stop offset="5%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0}/>
               </linearGradient>
             </defs>
 
@@ -140,30 +123,16 @@ export function DailyAttendanceChart({ data }: DailyAttendanceChartProps) {
               tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
-              className="text-muted-foreground"
             />
 
             <YAxis
               tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
-              className="text-muted-foreground"
               allowDecimals={false}
             />
 
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
-                boxShadow: "var(--shadow-md)",
-              }}
-              labelStyle={{
-                color: "hsl(var(--foreground))",
-                fontWeight: 600,
-              }}
-            />
-
+            <Tooltip />
             <Legend />
 
             <Area

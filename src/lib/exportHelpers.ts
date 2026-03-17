@@ -65,9 +65,9 @@ export function buildAttendanceMatrix(
   ];
 
   const rows = Array.from(dailyMap.values()).map((s) => {
-    let present = 0;
-    let late = 0;
-    let absent = 0;
+    let presentDayCount = 0;
+    let lateCount = 0;
+    let absentCount = 0;
 
     const row: any[] = [s.studentId, s.name];
 
@@ -82,17 +82,24 @@ export function buildAttendanceMatrix(
 
       if (status === "present") {
         row.push(1);
-        present++;
+        presentDayCount++;
       } else if (status === "late") {
-        row.push(1);
-        late++;
+        row.push(0.5);
+        presentDayCount++;
+        lateCount++;
+      } else if (status === "absent") {
+        row.push(0);
+        absentCount++;
       } else {
         row.push(0);
         absent++;
       }
     }
 
-    row.push(present, late, absent);
+    row.push(presentDayCount);
+    row.push(lateCount);
+    row.push(absentCount);
+
     return row;
   });
 
@@ -231,6 +238,10 @@ export async function exportPDF(header: string[], rows: any[]) {
       font: "THSarabun",
       fontStyle: "normal",
       fontSize: 18,
+    },
+    bodyStyles: {
+      font: "THSarabun",
+      fontSize: 16,
     },
   });
 
