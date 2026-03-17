@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Download, FileSpreadsheet, FileText, File, Search } from "lucide-react";
 import {
   Dialog,
@@ -18,12 +18,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
-
 import { AttendanceRecord } from "@/types/attendance";
-import { buildAttendanceMatrix, exportCSV, exportExcel, exportPDF } from "@/lib/exportHelpers";
+import {
+  buildAttendanceMatrix,
+  buildDailyAttendance,
+  exportCSV,
+  exportExcel,
+  exportPDF,
+} from "@/lib/exportHelpers";
 
 type ExportScope = "all" | "individual";
 type ExportFormat = "csv" | "pdf" | "excel";
+type ExportMode = "matrix" | "daily";
 
 interface ExportStudentsDialogProps {
   open: boolean;
@@ -44,8 +50,17 @@ export const ExportStudentsDialog = ({
 }: ExportStudentsDialogProps) => {
   const [scope, setScope] = useState<ExportScope>("all");
   const [format, setFormat] = useState<ExportFormat>("csv");
+  const [mode, setMode] = useState<ExportMode>("matrix");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDate, setSelectedDate] = useState(""); // ✅ NEW
+
+  // ✅ auto default เป็นวันนี้ (แต่ไม่กระทบ UI)
+  useEffect(() => {
+    if (mode === "daily" && !selectedDate) {
+      setSelectedDate(new Date().toISOString().split("T")[0]);
+    }
+  }, [mode]);
 
   const uniqueStudents = useMemo(() => {
     const map = new Map<string, { studentId: string; name: string }>();
@@ -88,16 +103,28 @@ export const ExportStudentsDialog = ({
     }
   };
 
-  const canExport = scope === "all" || selectedIds.size > 0;
+  // ✅ กัน user export โดยไม่เลือกวัน
+  const canExport =
+    (scope === "all" || selectedIds.size > 0) &&
+    (mode !== "daily" || selectedDate);
 
   const handleExport = async () => {
     const selectedStudentIds =
       scope === "all" ? undefined : Array.from(selectedIds);
 
-    const { header, rows } = buildAttendanceMatrix(
-      records,
-      selectedStudentIds
-    );
+    let result;
+
+    if (mode === "matrix") {
+      result = buildAttendanceMatrix(records, selectedStudentIds);
+    } else {
+      result = buildDailyAttendance(
+        records,
+        selectedStudentIds,
+        selectedDate // ✅ ส่งค่า
+      );
+    }
+
+    const { header, rows } = result;
 
     if (format === "csv") {
       exportCSV(header, rows);
@@ -124,6 +151,7 @@ export const ExportStudentsDialog = ({
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Scope */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Export Scope</Label>
             <RadioGroup
@@ -146,6 +174,7 @@ export const ExportStudentsDialog = ({
             </RadioGroup>
           </div>
 
+          {/* Student selector */}
           {scope === "individual" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -210,6 +239,7 @@ export const ExportStudentsDialog = ({
             </div>
           )}
 
+          {/* Format */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Export Format</Label>
             <div className="grid grid-cols-3 gap-2">
@@ -229,6 +259,42 @@ export const ExportStudentsDialog = ({
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Mode */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Export Mode</Label>
+
+          <RadioGroup
+            value={mode}
+            onValueChange={(v) => setMode(v as ExportMode)}
+            className="flex gap-4"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="matrix" id="mode-matrix" />
+              <Label htmlFor="mode-matrix">Summary (Matrix)</Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="daily" id="mode-daily" />
+              <Label htmlFor="mode-daily">Daily (Check-in/out)</Label>
+            </div>
+          </RadioGroup>
+
+          {/* ✅ แทรกแบบไม่ทำ UI เพี้ยน */}
+          {mode === "daily" && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                Select Date (Daily only)
+              </Label>
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>
